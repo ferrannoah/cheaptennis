@@ -4,6 +4,8 @@ A bright arcade tennis game for the browser. A fixed broadcast camera shows the 
 
 Everything is drawn and synthesised in code: there are no image or audio files. All names, events and Majors are fictional. School project.
 
+**Play it:** https://ferrannoah.github.io/cheaptennis/
+
 ## Controls
 
 | Action | Keyboard (single player) | Gamepad |
@@ -72,25 +74,13 @@ npx playwright test
 
 This runs the browser playtests (they use the installed Microsoft Edge; set `PW_CHANNEL=chromium` to use Playwright's Chromium). Screenshots are written to `playtest/`.
 
-## Deploying to GitHub Pages (planned, not done yet)
+## Deploying to GitHub Pages
 
-The workflow `.github/workflows/pages.yml` is already in the repo. It builds the game and publishes `dist/` to GitHub Pages on every push to `main`. To publish:
+Auto-publishing is set up: every push to `main` runs `.github/workflows/pages.yml`. It runs the unit tests, builds the game and deploys `dist/` to https://ferrannoah.github.io/cheaptennis/. If the tests fail, nothing is deployed. You can watch each run in the repo's **Actions** tab.
 
-1. Install Git and the GitHub CLI, then sign in: `gh auth login`.
-2. In this folder:
-   ```bash
-   git init
-   ```
-   ```bash
-   git add .
-   ```
-   ```bash
-   git commit -m "Baseline"
-   ```
-   ```bash
-   gh repo create cheaptennis --public --source . --push
-   ```
-3. On GitHub, go to Settings → Pages and set **Source: GitHub Actions**. The game will be live at `https://<your-user>.github.io/cheaptennis/`.
+```bash
+git push
+```
 
 ## Project layout
 
