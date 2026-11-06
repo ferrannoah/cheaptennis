@@ -214,7 +214,7 @@ export class AI {
     const dir = p.dir;
     let back = this.eff.homeBack;
     if (p.staminaF() < 0.3) back += 0.6;
-    let y = -dir * (HALF_LEN + back);
+    let y = -dir * (HALF_LEN + back - T.aiHomeShift);
     if (this.rushing) y = -dir * 3.4;
     const bx = m.predicted ? m.predicted.x : 0;
     let x = Math.max(-2.5, Math.min(2.5, bx * 0.35));
@@ -277,7 +277,8 @@ export class AI {
       const side = naturalFh || this.useFh ? fs : -fs;
       const px = b.x - 0.75 * side;
       const py = b.y - dir * T.contactAhead;
-      const tAvail = (f - 3) / 60;
+      // (M20) feet must be set when the swing animation starts, a windup before contact
+      const tAvail = (f - 3 - T.windup * 0.7) / 60;
       let need = p.timeTo(px, py, m.sf) + 0.06;
       // a smash while running back needs time to get set under the ball
       if (vol && b.z > T.overheadZ && (py - p.y) * dir < -0.5) need += T.overheadSetup;
@@ -285,6 +286,8 @@ export class AI {
         let cost = Math.abs(b.z - 1.0) * 2;
         cost += (f / 60) * (this.eff.aggression - 0.4) * 2.2;
         if (Math.abs(py) > HALF_LEN + 2.5) cost += (Math.abs(py) - HALF_LEN - 2.5) * 0.8 * (this.tactic === 'counter' ? 0.4 : 1);
+        // (M20) take the ball around the baseline like the Free Tennis players, not from deep behind it
+        if (Math.abs(py) > HALF_LEN - 0.5) cost += (Math.abs(py) - HALF_LEN + 0.5) * T.aiDeepCost * (this.tactic === 'counter' ? 0.5 : 1);
         if (vol) cost += this.rushing || Math.abs(p.y) < 6 ? -0.6 : 1.2;
         if (!best || cost < best.cost) best = { f, x: px, y: py, z: b.z, cost, vol };
       } else {

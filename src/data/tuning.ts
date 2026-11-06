@@ -2,9 +2,11 @@
 export const T = {
   // player movement
   // (M16 retune: players ~17% slower with real momentum, so a well-placed ball beats them)
-  baseSpeed: 4.5, // m/s at footwork 0 => scaled up by footwork (was 5.4)
-  footworkSpeedBonus: 1.9, // (was 2.3)
-  accel: 22, // m/s² (was 46: full speed in ~0.15 s; now ~0.3 s)
+  // (M20 retune to the Free Tennis footage: top speed ≈6.3-6.5 m/s at footwork 72, but every
+  // stroke now roots you for its animation, so a fast player still pays for each swing)
+  baseSpeed: 5.0, // m/s at footwork 0 => scaled up by footwork (M16: 4.5, before that 5.4)
+  footworkSpeedBonus: 2.0, // (M16: 1.9)
+  accel: 24, // m/s² (M16: 22; M15: 46)
   decel: 36, // (was 64)
   backpedalMul: 0.72, // top speed when running back towards your own baseline (lobs)
   swingMoveMult: 0.35,
@@ -25,6 +27,13 @@ export const T = {
   mishitLate: 15,
   swingRecover: 22,
   whiffRecover: 18,
+  // stroke commitment (M20, from the Free Tennis footage): no steering from the start of the
+  // swing animation until this many frames after contact (the follow-through)
+  followLock: 18,
+  serveLock: 18, // frames after the serve contact before the server can move
+  plantDecel: 30, // m/s²: planted feet stop a moving player this fast (5 m/s -> 0 in ~0.17 s)
+  slideMinSpeed: 3.2, // m/s: swinging faster than this turns the stroke into a slide
+  slideDecel: 9, // m/s² base slide friction (x grip; clay slides 25% further)
 
   // serve
   tossVz: 5.6,
@@ -44,6 +53,9 @@ export const T = {
   netLobReact: 18, // extra COM reaction frames when lobbed while at the net (turning to run back)
   returnReact: 8, // extra COM reaction frames when returning a serve
   backpedalErr: 2.2, // extra error for a ball hit in the air while running back at full speed
+  // (M20) COM court position, fitted to the Free Tennis footage (contact ≈ on the baseline, a shot every ~1.0 s)
+  aiHomeShift: 1.8, // m: every archetype recovers this much closer to the baseline than its homeBack
+  aiDeepCost: 0.9, // plan cost per metre of contact behind (baseline - 0.5 m)
 
   // ball physics
   drag: 0.0052,

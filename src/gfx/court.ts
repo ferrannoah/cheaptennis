@@ -66,7 +66,7 @@ export function makeCrowd(seed = 7, rows = 7, empty = 0.08, farRows = rows, side
   // side stands (rows going outward and up)
   for (const side of [-1, 1]) {
     for (let row = 0; row < rows; row++) {
-      const x = side * (10.6 + row * 1.0);
+      const x = side * (SIDE_WALL_X + 0.7 + row * 1.0);
       const z = 1.4 + row * 0.95;
       for (let y = sideRange[0] + 0.4; y <= sideRange[1] - 0.4; y += 0.95) push(x, y, z);
     }
@@ -146,7 +146,7 @@ export function drawCourtBackground(ctx: CanvasRenderingContext2D, cam: Camera, 
   const [sy0, sy1] = look.park ? look.sideRange : [-40, 28];
   for (const side of [-1, 1]) {
     for (let row = rows; row >= 0; row--) {
-      const x = side * (10.2 + row * 1.0);
+      const x = side * (SIDE_WALL_X + 0.3 + row * 1.0);
       const z = 1.0 + row * 0.95;
       poly(ctx, cam, [[x, sy0, z], [x + side * 1.0, sy0, z], [x + side * 1.0, sy1, z], [x, sy1, z]]);
       ctx.fillStyle = row % 2 ? standA : standB;
@@ -170,7 +170,7 @@ export function drawCourtBackground(ctx: CanvasRenderingContext2D, cam: Camera, 
       for (let i = 0; i < 9; i++) {
         const by = 17 - i * 5.2;
         const col = th.banners[(i + (side > 0 ? 1 : 0)) % th.banners.length];
-        const x = side * 10.25;
+        const x = side * (SIDE_WALL_X + 0.35);
         poly(ctx, cam, [[x, by - 0.9, 3.4], [x, by + 0.9, 3.4], [x, by + 0.9, 1.6], [x, by, 1.2], [x, by - 0.9, 1.6]]);
         ctx.fillStyle = col;
         ctx.fill();
@@ -182,13 +182,14 @@ export function drawCourtBackground(ctx: CanvasRenderingContext2D, cam: Camera, 
   }
 
   // ground: surround
-  groundQuad(ctx, cam, -10.2, -40, 10.2, 20, sf.colors.surround);
+  const GX = SIDE_WALL_X + 0.3;
+  groundQuad(ctx, cam, -GX, -40, GX, 20, sf.colors.surround);
   if (sf.id === 'grass') {
     // mow stripes across the full width, banded along y
     const step = HALF_LEN / 6;
     for (let i = -14; i < 10; i++) {
       const y0 = i * step;
-      groundQuad(ctx, cam, -10.2, y0, 10.2, y0 + step, i % 2 === 0 ? sf.colors.a : sf.colors.b);
+      groundQuad(ctx, cam, -GX, y0, GX, y0 + step, i % 2 === 0 ? sf.colors.a : sf.colors.b);
     }
   } else if (sf.id === 'hard') {
     groundQuad(ctx, cam, -HALF_W_DBL - 0.6, -HALF_LEN - 1.2, HALF_W_DBL + 0.6, HALF_LEN + 1.2, sf.colors.a);
@@ -196,7 +197,7 @@ export function drawCourtBackground(ctx: CanvasRenderingContext2D, cam: Camera, 
     // clay: subtle brushed bands + speckle
     const step = 1.3;
     for (let i = -30; i < 16; i++) {
-      groundQuad(ctx, cam, -10.2, i * step, 10.2, i * step + step, i % 2 === 0 ? sf.colors.a : sf.colors.b);
+      groundQuad(ctx, cam, -GX, i * step, GX, i * step + step, i % 2 === 0 ? sf.colors.a : sf.colors.b);
     }
   }
   // texture speckle
@@ -283,6 +284,11 @@ function drawPark(ctx: CanvasRenderingContext2D, cam: Camera): void {
 
 /** the far courtside wall */
 export const BOARD_Y = 19.6;
+/**
+ * The side walls (M20: was 9.9). With the Free Tennis framing the screen shows about ±8.6 m at the
+ * near baseline, so the side stands sit right at the edge of the picture and stay visible.
+ */
+export const SIDE_WALL_X = 8.6;
 
 /**
  * Courtside walls: plain themed windscreens (no advertising), a thin accent rule along the top,
@@ -293,22 +299,24 @@ function drawBoards(ctx: CanvasRenderingContext2D, cam: Camera, th: VenueTheme, 
   const col = park ? '#1f3d2c' : th.board;
   const accent = park ? '#2c5a40' : th.boardAccent;
   // back wall
-  poly(ctx, cam, [[-10, BOARD_Y, 0], [10, BOARD_Y, 0], [10, BOARD_Y, boardH], [-10, BOARD_Y, boardH]]);
+  const bx = SIDE_WALL_X + 0.1;
+  poly(ctx, cam, [[-bx, BOARD_Y, 0], [bx, BOARD_Y, 0], [bx, BOARD_Y, boardH], [-bx, BOARD_Y, boardH]]);
   const a = cam.project(0, BOARD_Y, boardH), b = cam.project(0, BOARD_Y, 0);
   const g = ctx.createLinearGradient(0, a.y, 0, b.y);
   g.addColorStop(0, shadeHex(col, 0.1));
   g.addColorStop(1, shadeHex(col, -0.2));
   ctx.fillStyle = g;
   ctx.fill();
-  poly(ctx, cam, [[-10, BOARD_Y, boardH - 0.08], [10, BOARD_Y, boardH - 0.08], [10, BOARD_Y, boardH], [-10, BOARD_Y, boardH]]);
+  poly(ctx, cam, [[-bx, BOARD_Y, boardH - 0.08], [bx, BOARD_Y, boardH - 0.08], [bx, BOARD_Y, boardH], [-bx, BOARD_Y, boardH]]);
   ctx.fillStyle = accent;
   ctx.fill();
   // side walls
   for (const side of [-1, 1]) {
-    poly(ctx, cam, [[side * 9.9, -40, 0], [side * 9.9, BOARD_Y, 0], [side * 9.9, BOARD_Y, boardH - 0.1], [side * 9.9, -40, boardH - 0.1]]);
+    const wx = side * SIDE_WALL_X;
+    poly(ctx, cam, [[wx, -40, 0], [wx, BOARD_Y, 0], [wx, BOARD_Y, boardH - 0.1], [wx, -40, boardH - 0.1]]);
     ctx.fillStyle = col;
     ctx.fill();
-    poly(ctx, cam, [[side * 9.9, -40, boardH - 0.18], [side * 9.9, BOARD_Y, boardH - 0.18], [side * 9.9, BOARD_Y, boardH - 0.1], [side * 9.9, -40, boardH - 0.1]]);
+    poly(ctx, cam, [[wx, -40, boardH - 0.18], [wx, BOARD_Y, boardH - 0.18], [wx, BOARD_Y, boardH - 0.1], [wx, -40, boardH - 0.1]]);
     ctx.fillStyle = accent;
     ctx.fill();
     if (th.ivy && !park) {
@@ -316,7 +324,7 @@ function drawBoards(ctx: CanvasRenderingContext2D, cam: Camera, th: VenueTheme, 
       const r0 = new Rng(side > 0 ? 41 : 43);
       for (let i = 0; i < 260; i++) {
         const y = r0.range(-30, BOARD_Y);
-        const p = cam.project(side * 9.9, y, 1.0 + r0.range(0, 0.25));
+        const p = cam.project(wx, y, 1.0 + r0.range(0, 0.25));
         ctx.fillStyle = r0.chance(0.5) ? '#2f6e2a' : '#3d8a34';
         ctx.beginPath();
         ctx.arc(p.x, p.y, Math.max(0.8, p.s * 0.09), 0, Math.PI * 2);

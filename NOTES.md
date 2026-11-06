@@ -51,6 +51,11 @@ unclear, and writes one prompt that it can then use to edit the game.
 ## Done
 <!-- Claude moves notes here after acting on them, with the date. -->
 
+### 2026-11-06: match the Free Tennis gameplay (M20)
+- Same dimensions as the Free Tennis recording: ball size, character size → **done**. The camera now frames the court like the recording, players are ≈1.4 court-metres tall with the bigger racket, and the ball was already the same size (0.2 m) and now has the same dark shadow. The crowd moved to the screen edges so it still shows.
+- Hitting should stop movement unless it's a slide → **done**. You're rooted from the start of the swing animation until the follow-through ends (~0.4 s; Free Tennis players stand still for ~0.35 s after hitting). Swing while running fast and you slide through the shot instead, with a slide pose and a skid trail.
+- Speed just like Free Tennis → **done, measured**. Top speed is up to ≈6.4 m/s like the recording, groundstrokes are 8% faster, and the COM plays around the baseline. A shot now comes back every ~1.08 s (1.00 s in the recording, 1.23 s before).
+
 ### 2026-11-06: playtest round 2 (M19)
 - The advertisements can go → **removed**. The walls are plain themed windscreens (no sponsor names, clock or speed board); serve speed still pops up on court.
 - See which stats get worse with stamina, show/hide with H → **done**. H toggles a panel listing top speed, acceleration, timing window, shot accuracy, shot power, serve speed and serve accuracy in %, from the game's own fatigue rules.

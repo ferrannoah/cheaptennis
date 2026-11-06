@@ -152,8 +152,9 @@ function netCrossZ(b0: BallState, sf: Surface): number {
 }
 
 // (M16: groundstrokes ~10% faster so placement beats footspeed; drops land a little deeper)
+// (M20: groundstrokes another ~8% faster: a shot every ~1.0 s like the Free Tennis footage)
 const BASE_DEPTH: Record<ShotType, number> = { normal: 9.0, topspin: 9.3, slice: 8.4, lob: 10.6, drop: 2.8 };
-const BASE_PACE: Record<ShotType, number> = { normal: 25.3, topspin: 23.1, slice: 19.5, lob: 13, drop: 9 };
+const BASE_PACE: Record<ShotType, number> = { normal: 27.3, topspin: 24.9, slice: 21.1, lob: 13, drop: 9 };
 const MARGIN: Record<ShotType, number> = { normal: 0.4, topspin: 0.8, slice: 0.25, lob: 3.4, drop: 0.22 };
 const BASE_ERR: Record<ShotType, number> = { normal: 0.038, topspin: 0.034, slice: 0.032, lob: 0.04, drop: 0.045 };
 

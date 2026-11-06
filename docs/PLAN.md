@@ -120,6 +120,13 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` verified
 - [x] **Crowd scales with the event:** venue level 0-5 from the career tier, with qualifying one level smaller. Futures and practice use a park court with two-row bleachers and a sparse crowd. Challengers get small stands, then 250 / 500 / 1000 grow, and Majors and Finals are full stadiums. *(venues.spec: level 0/1/2/4 screenshots)*
 - [x] **Skip clears the point UI:** the Space skip also dismisses the umpire call, popups and banners. *(skip-walk.spec asserts call/popups/banner are empty after a skip)*
 
+## Free Tennis reference (user request, 2026-11-06)
+### M20: Same dimensions, stroke commitment, reference pace
+- [x] **Measure the footage:** the user's Free Tennis recording, tracked at 20 Hz (ball blob, shadows, court-line calibration): sizes, player/ball speed, time between hits, contact depth, net height, still time. *(numbers in GDD §2.9d)*
+- [x] **Same dimensions:** a long-lens camera fitted to the footage's court framing (max error ≈7 px), players ≈1.4 court-metres tall, a bigger racket, the same ball size and a darker ball shadow. Side walls/stands moved in to ±8.6 m so the event-size crowd stays on screen. *(match/venue screenshots compared with footage frames)*
+- [x] **Stroke commitment + slide:** no steering from the swing animation to the end of the follow-through (and after the serve); a running swing becomes a slide with its own pose and skid trail. *(stroke-lock.test: no acceleration or turning while locked, planted strokes stop within 10 frames, slides happen; the lock window matches the swing)*
+- [x] **Reference pace:** faster players, +8% groundstroke pace, and the COM plays around the baseline. A shot every 1.08 s versus 1.00 s in the footage. *(reference-pace.test asserts the footage targets; balance.test still green; timing.spec MISHIT fixed with a speed-scaled late-contact tolerance)*
+
 ---
 
 ## Definition of Done (verify each item)
@@ -148,3 +155,5 @@ Evidence: `npm test` (Vitest, 45 tests) and `npx playwright test` (Playwright vi
 - 2026-11-05: M14 AI game plans added (user request). While measuring it, found and fixed an AI bug: the COM's chosen aim was being dropped at contact, so every AI shot went down the middle. Rallies went from ~10-12 shots to ~6-8. The AI now also leaves balls that are going out and has a human-like 0.15-0.3 s reaction time.
 - 2026-11-06: Git set up; repo `ferrannoah/cheaptennis` (public) with auto-deploy to GitHub Pages. M15 quick fixes done (menu double-step, skip between points, practice shots play out).
 - 2026-11-06: M16 speed balance (measured before/after), M17 Tactics School, M18 broadcast look. Playtest round 1 notes all handled; still needs a hand-played check of the new feel.
+- 2026-11-06: M19 playtest round 2 (no ads, hidden COM plan, H fatigue panel, racket depth, crowd by event size, skip clears UI).
+- 2026-11-06: M20 matched to the user's Free Tennis recording (camera framing, sizes, pace) and added stroke commitment with slide strokes. 76 unit tests + 28 browser tests green.

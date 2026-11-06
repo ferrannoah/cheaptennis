@@ -67,5 +67,10 @@ export class Camera {
   }
 }
 
-/** The match broadcast camera. */
-export const matchCam = new Camera(-38, 25.5, 0.9, 0, 955, 234);
+/**
+ * The match broadcast camera (M20): a long-lens view fitted to the Free Tennis reference footage,
+ * so the court fills the same share of the screen (near baseline 408 px wide at y≈395, far
+ * baseline 340 px at y≈102; elevation ≈21°). Fitted by least squares over both baselines,
+ * both service lines and the net (max error ≈7 px).
+ */
+export const matchCam = new Camera(-112.8, 43.76, 0, 0, 4092, 234.8);

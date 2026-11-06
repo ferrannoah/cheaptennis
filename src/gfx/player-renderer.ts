@@ -133,10 +133,14 @@ export interface DrawOpts {
 
 /** Stylised proportions (M18): short legs, big head, oversized racket. */
 const LEG_K = 0.78; // legs are 78% of the pose's leg length
-const HEAD_R = 0.22; // head radius (m): head ≈ a quarter of the figure's height
-const RACKET_LEN = 0.98; // total racket length (m), ~1.5x the old one
+// M20: matched to the Free Tennis footage. In a match the figure is drawn at FIGURE_SCALE, so a
+// standing player is ≈1.4 court-metres tall, the head ≈19% of that, and the racket ≈0.75 of it.
+const HEAD_R = 0.17; // head radius (m)
+const RACKET_LEN = 1.28; // total racket length (m)
 const RACKET_HANDLE = 0.3;
-const RACKET_W = 0.2; // head half-width
+const RACKET_W = 0.26; // head half-width
+/** in-match draw scale of the figure relative to the court (M20, was 1.15) */
+export const FIGURE_SCALE = 0.82;
 /** light comes from the upper left of the screen */
 const LIGHT: P2 = [-0.55, 0.85];
 

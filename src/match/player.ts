@@ -66,6 +66,13 @@ export class Player {
   celebrate = 0;
   stepAcc = 0;
   slideT = 0;
+  /**
+   * Stroke commitment (M20): while a swing animates the player can't steer. 'plant' = feet set,
+   * brake hard; 'slide' = swung on the run, momentum carries them through the shot.
+   */
+  lock: 'none' | 'plant' | 'slide' = 'none';
+  /** sideways direction of a slide stroke (+1 = toward +x), for the pose */
+  slideDir = 0;
 
   constructor(
     public idx: 0 | 1,
@@ -183,6 +190,19 @@ export class Player {
       this.runPhase += sp * 0.045;
       this.stepAcc += sp / 60;
     }
+  }
+
+  /** no steering: shed speed at `decel` m/s² (planted feet or a slide) and keep moving with what's left */
+  brake(decel: number): void {
+    const sp = Math.hypot(this.vx, this.vy);
+    const ns = Math.max(0, sp - decel / 60);
+    if (sp > 1e-6) {
+      this.vx *= ns / sp;
+      this.vy *= ns / sp;
+    }
+    this.x += this.vx / 60;
+    this.y += this.vy / 60;
+    this.clamp();
   }
 
   clamp(): void {

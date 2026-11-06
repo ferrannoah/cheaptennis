@@ -3,7 +3,7 @@ import { Player } from '../match/player';
 import { matchCam, Camera } from './camera';
 import { Layer } from './layer';
 import { drawCourtBackground, drawNet, drawCrowd, makeCrowd, Seat } from './court';
-import { drawFigure, drawShadow, lerpPose, POSES, Pose, smooth } from './player-renderer';
+import { drawFigure, drawShadow, lerpPose, POSES, Pose, smooth, FIGURE_SCALE } from './player-renderer';
 import { Particles } from './particles';
 import { text, font } from './text';
 import { TacticId } from '../data/tactics';
@@ -211,6 +211,13 @@ export class MatchView {
         this.particles.spawn('dust', p.x, p.y, 0.05, 1, '#e0a07a', 0.6);
         this.stampWear(p.x, p.y, 0.25, 0.06);
       }
+      // slide stroke (M20): a skid trail on every surface while the slide carries the player
+      if (p.lock === 'slide' && sp > 1) {
+        const id = this.m.sf.id;
+        const col = id === 'clay' ? '#e0a07a' : id === 'grass' ? '#b7e08f' : '#dfe8f0';
+        if (Math.random() < 0.7) this.particles.spawn('dust', p.x + (Math.random() - 0.5) * 0.4, p.y, 0.05, 1, col, id === 'hard' ? 0.35 : 0.6);
+        if (id !== 'hard') this.stampWear(p.x, p.y, 0.22, id === 'grass' ? 0.07 : 0.08);
+      }
       if (p.sweat && Math.random() < 0.06) this.particles.spawn('sweat', p.x, p.y, 1.75, 1, '#bfe6ff', 0.5);
     }
   }
@@ -245,10 +252,10 @@ export class MatchView {
     }
 
     // shadows
-    for (const p of m.players) if (!(m.practice && p.idx === 1)) drawShadow(ctx, this.cam, p.x, p.y, 0.42);
+    for (const p of m.players) if (!(m.practice && p.idx === 1)) drawShadow(ctx, this.cam, p.x, p.y, 0.48);
     if (m.ballVisible && m.ball.z > -1) {
-      const a = Math.max(0.12, 0.38 - m.ball.z * 0.06);
-      drawShadow(ctx, this.cam, m.ball.x, m.ball.y, 0.09, a);
+      const a = Math.max(0.2, 0.5 - m.ball.z * 0.06);
+      drawShadow(ctx, this.cam, m.ball.x, m.ball.y, 0.11, a);
     }
 
     // far side objects then net then near
@@ -372,10 +379,20 @@ export class MatchView {
         ({ back, con, fol } = strokePoses(sw.fh, sw.type, p.setup.twoHanded));
       }
       const a = W8 * 0.45;
-      if (t < a) return lerpPose(POSES.ready, back, smooth(t / a));
-      if (t < W8) return lerpPose(back, con, smooth((t - a) / (W8 - a)));
-      if (t < W8 + 12) return lerpPose(con, fol, smooth((t - W8) / 12));
-      if (t < W8 + 24) return lerpPose(fol, POSES.ready, smooth((t - W8 - 12) / 12));
+      let out: Pose | null = null;
+      if (t < a) out = lerpPose(POSES.ready, back, smooth(t / a));
+      else if (t < W8) out = lerpPose(back, con, smooth((t - a) / (W8 - a)));
+      else if (t < W8 + 12) out = lerpPose(con, fol, smooth((t - W8) / 12));
+      else if (t < W8 + 24) out = lerpPose(fol, POSES.ready, smooth((t - W8 - 12) / 12));
+      if (out && t >= 0) {
+        // slide stroke (M20): the legs split into a slide in the running direction while the arms swing
+        if (p.lock === 'slide' && sw.kind !== 'dive') {
+          const mirror = (p.side === 1) !== (p.setup.hand === 'L');
+          const k = Math.min(1, Math.hypot(p.vx, p.vy) / 2 + 0.35);
+          return slidePose(out, (p.slideDir || 1) * (mirror ? -1 : 1), k);
+        }
+        return out;
+      }
     }
     if (p.celebrate > 0 && (m.phase === 'dead' || m.phase === 'over')) return POSES.celebrate;
     const sp = Math.hypot(p.vx, p.vy);
@@ -399,7 +416,7 @@ export class MatchView {
     if (p.splitStep > 0) bob = Math.sin((p.splitStep / 12) * Math.PI) * 0.1;
     else if (Math.hypot(p.vx, p.vy) < 0.5) bob = Math.sin(this.time * 4 + p.idx) * 0.012;
     if (p.celebrate > 0 && (this.m.phase === 'dead' || this.m.phase === 'over')) bob = Math.abs(Math.sin(this.time * 9)) * 0.12;
-    drawFigure(ctx, pr.x, pr.y, pr.s * 1.15, pose, p.setup.kit, { mirror, facingCamera: p.side === 1, twoHanded: p.setup.twoHanded, bob });
+    drawFigure(ctx, pr.x, pr.y, pr.s * FIGURE_SCALE, pose, p.setup.kit, { mirror, facingCamera: p.side === 1, twoHanded: p.setup.twoHanded, bob });
   }
 
   // ======================================================== HUD
@@ -742,6 +759,27 @@ export function strokePoses(fh: boolean, type: ShotType, twoHanded: boolean): { 
   if (fh) return { back: POSES.fhBack, con: POSES.fhContact, fol: type === 'lob' ? POSES.lobFollow : POSES.fhFollow };
   if (twoHanded) return { back: POSES.bhBack, con: POSES.bhContact, fol: type === 'lob' ? lerpPose(POSES.bhFollow, POSES.lobFollow, 0.5) : POSES.bhFollow };
   return { back: POSES.bh1Back, con: POSES.bh1Contact, fol: type === 'lob' ? lerpPose(POSES.bh1Follow, POSES.lobFollow, 0.5) : POSES.bh1Follow };
+}
+
+/**
+ * Slide stroke (M20): keep the arms and racket of the stroke pose, drop the body and split the legs.
+ * `d` is the slide direction in body space (+1 = the figure's +x), `k` 0..1 how deep the slide is.
+ */
+export function slidePose(p: Pose, d: number, k: number): Pose {
+  const drop = 0.17 * k;
+  const o: Pose = { ...p };
+  for (const j of ['head', 'neck', 'sL', 'sR', 'eL', 'eR', 'hL', 'hR'] as const) o[j] = [p[j][0] + d * 0.06 * k, p[j][1] - drop];
+  const lerp = (a: [number, number], b: [number, number]): [number, number] => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+  // lead leg (slide side) bent and sliding; trail leg stretched out behind
+  const lead = d > 0 ? 'R' : 'L';
+  const trail = d > 0 ? 'L' : 'R';
+  o.hip = lerp(p.hip, [p.hip[0] + d * 0.08, p.hip[1] - drop]);
+  o[`k${lead}`] = lerp(p[`k${lead}`], [d * 0.36, 0.4]);
+  o[`f${lead}`] = lerp(p[`f${lead}`], [d * 0.58, 0.03]);
+  o[`k${trail}`] = lerp(p[`k${trail}`], [-d * 0.3, 0.28]);
+  o[`f${trail}`] = lerp(p[`f${trail}`], [-d * 0.66, 0.03]);
+  o.lean = p.lean + d * 0.05 * k;
+  return o;
 }
 
 function mirrorPose(p: Pose): Pose {

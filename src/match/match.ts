@@ -161,6 +161,7 @@ export class Match {
       p.vx = p.vy = 0;
       p.swing = null;
       p.recover = 0;
+      p.lock = 'none';
       p.serve = { phase: 'ready', t: 0, tossApex: 34, type: 'flat' };
       p.meterA = -1;
     }
@@ -490,7 +491,21 @@ export class Match {
     if (p.bufferT > 0) p.bufferT--;
     this.aimHint[p.idx] = { x: aimX, d: aimDepth };
     const swinging = !!p.swing && !p.swing.done;
-    p.move(mx, my, this.sf, swinging);
+    const wasLocked = p.lock !== 'none';
+    const locked = this.strokeLocked(p);
+    if (locked && !wasLocked) {
+      // the swing animation starts: plant, or slide through it if we were running
+      const sp = Math.hypot(p.vx, p.vy);
+      if (sp >= T.slideMinSpeed && !(p.serve.phase === 'hit' && p.serve.t < T.serveLock)) {
+        p.lock = 'slide';
+        p.slideDir = Math.sign(p.vx) || 0;
+        p.slideT = 20;
+        this.emit({ t: 'step', p: p.idx, slide: true });
+      } else p.lock = 'plant';
+    } else if (!locked) p.lock = 'none';
+    if (p.lock === 'slide') p.brake(T.slideDecel * this.sf.grip * (this.sf.slides ? 0.75 : 1));
+    else if (p.lock === 'plant') p.brake(T.plantDecel * this.sf.grip);
+    else p.move(mx, my, this.sf, swinging);
     if (p.stepAcc > 0.9) {
       p.stepAcc = 0;
       this.emit({ t: 'step', p: p.idx, slide: false });
@@ -517,6 +532,16 @@ export class Match {
     if (p.swing && p.swing.done && this.frame - p.swing.contactAt > T.swingRecover) p.swing = null;
     // animation state
     if (!p.swing) p.anim = Math.hypot(p.vx, p.vy) > 0.6 ? 'run' : p.staminaF() < 0.2 ? 'slump' : 'idle';
+  }
+
+  /**
+   * Stroke commitment (M20): no steering from the first frame of the swing animation until the
+   * follow-through is done, and briefly after the serve.
+   */
+  strokeLocked(p: Player): boolean {
+    if (p.serve.phase === 'hit' && p.serve.t < T.serveLock) return true;
+    const sw = p.swing;
+    return !!sw && this.frame >= sw.start && this.frame <= sw.contactAt + T.followLock;
   }
 
   private incomingFor(p: Player): boolean {
@@ -621,7 +646,9 @@ export class Match {
     const netMag = sw.kind === 'volley' && p.setup.badges.includes('netMagnet') ? 1.1 : 1;
     const maxReach = T.stretchReach * wall * netMag;
     const inZ = b.z >= T.minContactZ && b.z <= T.maxContactZ + (sw.kind === 'overhead' ? 0.3 : 0);
-    if (!this.incomingFor(p) || lat > maxReach || dy > 1.4 || !inZ) {
+    // a late swing can still frame a ball that passed the contact plane up to ~0.1 s ago
+    const passTol = Math.max(1.4, Math.abs(b.vy) * 0.1);
+    if (!this.incomingFor(p) || lat > maxReach || dy > passTol || !inZ) {
       p.recover = T.whiffRecover;
       this.emit({ t: 'whiff', p: p.idx, reason: lat > maxReach ? 'out of reach' : !inZ ? (b.z > T.maxContactZ ? 'too high' : 'too low') : 'missed it' });
       return;

@@ -34,14 +34,15 @@ Everything serves the swing. The moment of contact must feel crisp, legible and 
 | Audio | Web Audio: synthesized SFX + a 4-channel chip tracker for music. |
 
 ### Camera
-A fixed, high, slightly tilted broadcast camera behind the near baseline. A real pinhole projection of court-space metres (x across, y along the court, z up):
-- Camera at `(0, -38 m, 25.5 m)` aimed just beyond the net (focal 955 px); tuned so the **whole court, both players and the stand edges** fit in 640×480.
-- Result: the far baseline is narrower than the near one (lines converge gently), the far player is drawn ~65% the size of the near one, and ball height (z) lifts the ball off its shadow on screen.
+A fixed long-lens broadcast camera behind the near baseline. A real pinhole projection of court-space metres (x across, y along the court, z up):
+- **M20:** fitted to the Free Tennis reference footage the user supplied. Camera at `(0, -112.8 m, 43.8 m)` aimed at the court centre (≈21° elevation, focal 4092 px). The court fills the same share of the screen height as in the footage: near baseline 408 px wide at y≈395, far baseline 340 px at y≈102 (least-squares fit over both baselines, both service lines and the net, max error ≈7 px). Our 4:3 screen is wider than the footage's, so the side stands sit in the extra width at the screen edges (side walls at ±8.6 m, run-off ±8.2 m).
+- Result: the court lines converge only slightly (far baseline 83% of the near one), and the far player is drawn ~83% the size of the near one. Ball height (z) lifts the ball off its shadow on screen.
+- (M1-M19 used a closer, higher camera at `(0, -38, 25.5)`, focal 955.)
 - The ball always has a soft round shadow on the ground at `(x, y, 0)`: the shadow is the player's key depth cue.
 
 ### Visual style
 - **Court:** grass = mowed stripes in two alternating greens across the court; **clay** = terracotta with subtle brushed texture and darker line-adjacent dust; **hard** = blue court inside a green surround. Crisp white lines (doubles court drawn, singles played). Dark mesh net with white tape and **yellow posts**.
-- **Players (M18 restyle):** chunky, stylised athletes with a big head (about a quarter of the height), short legs and an oversized racket (~1.5× real scale) with a visible string bed. The frame is tinted in the player's band colour. Limbs are shaded capsules lit from the upper left, and the shirt is rounded with sleeve caps and a trim stripe. Kit colours are customisable, with a round drop shadow underneath. This is an original design inspired by the general big-racket / small-player style of casual browser tennis games; no other game's art is copied.
+- **Players (M18 restyle, M20 sizes):** chunky, stylised athletes with a big head, short legs and an oversized racket with a visible string bed. **M20:** sized to the Free Tennis footage relative to the court. A standing player is ≈1.4 court-metres tall (≈0.13 of the court width). The head is ≈19% of the height. The racket is ≈1.05 m long (≈0.75 of the height) with a ≈0.8 × 0.45 m head. The ball is drawn 0.2 m across with a dark 0.22 m shadow; the footage's ball measured 0.21 m. The player shadow is ≈1 m wide. The frame is tinted in the player's band colour. Limbs are shaded capsules lit from the upper left, and the shirt is rounded with sleeve caps and a trim stripe. Kit colours are customisable, with a round drop shadow underneath. This is an original design inspired by the general big-racket / small-player style of casual browser tennis games; no other game's art is copied.
 - **Animations** (procedural keyframed poses, interpolated): idle bounce, run (with lean), split step, serve (toss, trophy pose, strike), volley punch, overhead, dive/stretch, celebration and tired slump. The ground strokes are clearly distinct:
   - **Forehand:** unit turn with the off arm pointing at the ball, low-to-high swing, finish wrapped over the opposite shoulder.
   - **Two-handed backhand:** both hands on the grip from the take-back to a high finish.
@@ -237,6 +238,22 @@ Design rule: **the ball should beat the player.** A well-placed ball wins; a bal
 | Drops won vs. a player at the baseline | 43-71% (PERFECT 50-83%) | 46-70%, about 53% pooled (PERFECT about 59%) |
 | Lobs won vs. a net player | 18-39% | 52-58% |
 | Aces | 0% (never called) | 3-6% (most on grass) |
+
+### 2.9d Free Tennis reference pace + stroke commitment (M20)
+The user asked for the same dimensions and speeds as the Free Tennis gameplay they recorded. The recording was tracked frame by frame at 20 Hz. The ball came from its yellow blob, ground positions from the shadows, and everything was converted to court metres through the court lines. Our AI-vs-AI rallies were then measured the same way (`tests/reference-pace.test.ts` asserts the targets):
+
+| Metric | Free Tennis footage | Before M20 | After M20 |
+|---|---|---|---|
+| Player speed when moving, p90 | 5.9-6.3 m/s | 5.5 | 5.8 |
+| Ball ground speed, median / p90 | 17.6 / 28.9 m/s | 19.5 / 27.9 | 18.8 / 27.3 |
+| Time between hits, median (p75) | 1.00 s (1.25) | 1.23 (1.43) | 1.08 (1.25) |
+| Hitter's distance from the net at contact, median | 11.0 m | 13.1 | 11.6 |
+| Net-crossing height, median | 2.0 m | 1.75 | 1.6 |
+
+- **Stroke commitment:** from the first frame of the swing animation (a windup before contact) until `followLock` = 18 frames after contact, the player can't steer. A planted player brakes at 30 m/s² (5 m/s to 0 in ~0.17 s). The serve roots the server for 18 frames. Pressing early still allows slow movement until the animation starts. You must be in position before you swing, and each stroke costs ~0.4 s of recovery. In the footage, players stand still for a median 0.35 s.
+- **Slide strokes:** swinging while moving faster than 3.2 m/s turns the stroke into a slide. Momentum carries you through the shot (friction 9 m/s² × grip, clay 25% further), with a split-leg slide pose and a skid trail on every surface. The "still running" error still applies to slides.
+- **Speed retune:** top speed 5.0 + 2.0 × footwork/99 m/s (6.45 at footwork 72), acceleration 24. Groundstroke pace +8% (normal 27.3, topspin 24.9, slice 21.1). The COM now takes the ball around the baseline: it recovers 1.8 m closer than its archetype depth and pays a cost for contact more than 0.5 m behind the baseline. A late swing can still frame a ball that passed the contact plane up to 0.1 s ago, so MISHIT stays reachable at the faster pace.
+- Balance after M20 (pooled, `balance.test.ts`): rallies 5.6-7.0 shots, corners won outright 14-18%, drops vs a baseline player 31-38%, lobs vs a net player 44-53%.
 
 ### 2.10 Umpire & crowd
 Text calls ("OUT!", "FAULT!", "DOUBLE FAULT", "LET", "DEUCE", "ADVANTAGE …", "GAME …", "SET …", "GAME, SET AND MATCH") with synth stings; crowd applause scaled by rally length and shot quality; "ooh" on near misses and PERFECT winners; hush during serves.

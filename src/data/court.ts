@@ -9,7 +9,7 @@ export const POST_X = 6.4;
 export const BALL_R = 0.034;
 export const GRAVITY = 9.81;
 /** run-off area */
-export const RUN_X = 9.2;
+export const RUN_X = 8.2; // (M20: was 9.2; the side walls moved in to stay on screen)
 export const RUN_Y = 18.2;
 
 export function netHeightAt(x: number): number {
