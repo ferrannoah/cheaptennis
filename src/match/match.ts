@@ -30,6 +30,10 @@ export interface PracticeFeed {
   speed: number; // 0.6..1.3
   interval: number; // frames between feeds
   serve?: boolean; // serve practice instead of feeding
+  /** landing distance from the net in metres [min, max] (default: deep, 8-10.6) */
+  depth?: [number, number];
+  /** feed to the sideline instead of near the player (stretch / defence drills) */
+  wide?: boolean;
 }
 
 export type MatchEvent =
@@ -902,8 +906,8 @@ export class Match {
     const p = this.players[0];
     const type: ShotType = pr.type === 'random' ? this.rng.pick(['normal', 'topspin', 'slice', 'lob'] as ShotType[]) : pr.type;
     const sideSign = pr.side === 'mix' ? (this.rng.chance(0.5) ? 1 : -1) : (pr.side === 'fh' ? 1 : -1) * (p.setup.hand === 'R' ? 1 : -1);
-    const tx = Math.max(-3.6, Math.min(3.6, p.x + sideSign * this.rng.range(0.9, 2.6)));
-    const depth = type === 'lob' ? -10.2 : this.rng.range(-10.6, -8.0);
+    const tx = pr.wide ? sideSign * this.rng.range(2.9, 3.7) : Math.max(-3.6, Math.min(3.6, p.x + sideSign * this.rng.range(0.9, 2.6)));
+    const depth = type === 'lob' ? -10.2 : pr.depth ? -this.rng.range(pr.depth[0], pr.depth[1]) : this.rng.range(-10.6, -8.0);
     const from: BallState = { x: this.rng.range(-0.5, 0.5), y: HALF_LEN + 0.5, z: 0.9, vx: 0, vy: 0, vz: 0, spin: 0, side: 0 };
     const spin = { normal: 0.3, topspin: 1.2, slice: -0.85, lob: 0.4, drop: -1.9 }[type];
     const T0 = type === 'lob' ? 2.2 : 22 / (20 * pr.speed);

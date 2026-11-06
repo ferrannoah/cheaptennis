@@ -17,6 +17,7 @@ import { audio } from '../core/audio';
 import { input } from '../core/input';
 import { HALF_LEN, SERVICE_Y } from '../data/court';
 import { matchCam } from '../gfx/camera';
+import { TacticsSchool } from './tactics-school';
 
 const FEEDS: (ShotType | 'random')[] = ['normal', 'topspin', 'slice', 'lob', 'random'];
 const FEED_LABEL: Record<string, string> = { normal: 'Normal', topspin: 'Topspin', slice: 'Slice', lob: 'Lob', random: 'Random mix' };
@@ -32,6 +33,7 @@ export class PracticeSetup extends MenuScene {
   items(): MenuEntry[] {
     return [
       { id: 'tutorial', label: 'Tutorial (start here!)', action: () => startTutorial(this.surface) },
+      { id: 'school', label: 'Tactics School', hint: '8 lessons on real singles tactics, each with a drill', action: () => game.goto(new TacticsSchool(this.surface, () => game.goto(new PracticeSetup()))) },
       { id: 'feed', label: 'Ball machine feed', value: FEED_LABEL[this.feed], change: (d) => (this.feed = cycle(FEEDS, this.feed, d)) },
       { id: 'side', label: 'Feed to', value: { fh: 'Forehand', bh: 'Backhand', mix: 'Both sides' }[this.side], change: (d) => (this.side = cycle(SIDES, this.side, d)) },
       { id: 'speed', label: 'Feed speed', value: { 0.75: 'Slow', 1: 'Medium', 1.25: 'Fast' }[this.speed] ?? 'Medium', change: (d) => (this.speed = cycle(SPEEDS, this.speed, d)) },

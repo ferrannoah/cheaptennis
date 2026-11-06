@@ -17,7 +17,10 @@ export class Autopilot {
     const p = m.players[this.playerIdx];
     if (!p.ctrl) return;
     const id = p.ctrl.id;
+    // in a Tactics School drill, follow the lesson's coaching hint (where a good player would aim)
+    const hint = (top as unknown as { lessonHint?: () => { x: number; d: number; shot?: ShotType; serveAim?: number } }).lessonHint?.();
     if (m.phase === 'serve' && m.server === p) {
+      if (hint?.serveAim && p.serve.phase === 'toss') input.vpress(id, hint.serveAim > 0 ? 'right' : 'left', 1);
       if (p.serve.phase === 'ready' && m.phaseT > 50 && !p.autoWalk) input.vpress(id, 'normal', 1);
       else if (p.serve.phase === 'toss' && p.serve.t === p.serve.tossApex - 1 + this.offset) {
         if (this.shot === 'topspin') input.vpress(id, 'topspin', 2);
@@ -41,8 +44,8 @@ export class Autopilot {
     const sw = p.swing;
     if (sw && !sw.done && sw.contactAt - m.frame <= 2 && this.ai.plan) {
       // just before contact, hold the aim direction instead of the movement direction (like a player would)
-      const ax = this.ai.plan.aimX;
-      const ad = this.ai.plan.aimDepth * p.dir; // near player: screen up = deep
+      const ax = hint ? hint.x : this.ai.plan.aimX;
+      const ad = hint ? hint.d : this.ai.plan.aimDepth * p.dir; // near player: screen up = deep
       if (ax > 0.4) input.vpress(id, 'right', 1);
       if (ax < -0.4) input.vpress(id, 'left', 1);
       if (ad > 0.5) input.vpress(id, 'up', 1);
@@ -55,7 +58,7 @@ export class Autopilot {
     }
     if (o.press) {
       // the swing press happens one frame later than the AI's decision because inputs are read next step
-      const t: ShotType = this.shot === 'mix' ? o.press : this.shot;
+      const t: ShotType = hint?.shot ?? (this.shot === 'mix' ? o.press : this.shot);
       input.vpress(id, t, 1);
     }
   }

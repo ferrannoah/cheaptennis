@@ -293,7 +293,34 @@ Two humans, same screen (P1 near, P2 far). Keyboard split (see §2.1) and/or two
 
 ### 3.5 Practice
 - **Ball machine:** choose feed type (normal / topspin / slice / lob / random), side, speed; free hitting with the Training HUD on by default; streak counter of PERFECT hits.
-- **Tutorial** (step list with on-screen prompts and success checks): moving → timing (hit 5 GOOD+) → aiming (hit targets left/right/deep/short) → each shot type (topspin, slice, lob, drop) → serve (flat, kick, slice into targets) → stamina explainer. Shows the current key bindings.
+- **Tutorial** (step list with on-screen prompts and success checks): moving → timing (hit 5 GOOD+) → aiming (hit targets left/right/deep/short) → each shot type (topspin, slice, lob, drop) → serve (flat, kick, slice into targets) → stamina explainer. Shows the current key bindings. Each shot plays out (landing ring, IN/OUT) before the next ball, and a step finished by a hit waits for that ball to land.
+
+### 3.5b Tactics School (playtest round 1, M17)
+Practice → **Tactics School**: eight lessons on real singles tactics, not tricks for beating the COM. Each lesson has:
+- an intro card explaining the idea, with the drill underneath;
+- a ball-machine drill with yellow target zones, an optional red stand-in opponent, progress pips and NICE / NOT QUITE feedback;
+- a summary card with the takeaway and the AI game plan built on the same idea.
+
+Progress is saved (`baseline.lessons`). The content is data in `src/data/lessons.ts`.
+
+| # | Lesson | Drill (pass condition) | Game plan |
+|---|---|---|---|
+| 1 | Crosscourt is your safe rally ball | 5 in a row: diagonal, past the service line | Baseline Grind |
+| 2 | Hit to the open court | 4 deep, away from the stand-in opponent | Serve + 1 |
+| 3 | Change direction on a good ball | 3 clean (GOOD/PERFECT) down the line, deep | Forehand Dominance |
+| 4 | Attack the short ball | 3: hit from inside the baseline, land deep | Net Attack |
+| 5 | Serve to a spot | 2 wide + 2 down the T | Serve + 1 |
+| 6 | Find the weaker side | 4 deep to a right-hander's backhand | Forehand Dominance |
+| 7 | Beat the net player | 4: deep lob over them, or pass along a sideline | Counterpunch |
+| 8 | Defend, then recover | 3: deep through the middle **and** back near the centre before it lands | Baseline Grind |
+
+Sources for the tactics (general coaching consensus):
+- [LTA singles tactics](https://clubspark.lta.org.uk/Adeltennisacademy/Coaching/Adult/SinglesTactics)
+- [USHSTA singles strategies](https://ushsta.org/tennis-singles-strategies-and-tactics/)
+- [TennisOne: crosscourt patterns](https://tennisone.tennisplayer.net/club/lessons/jm/patterns/cc.php)
+- [TennisOne: the short ball](https://tennisone.tennisplayer.net/club/lessons/king/shortball/short.php)
+- [TennisOne: approach shots](https://tennisone.tennisplayer.net/club/lessons/fein/approach/approach.php)
+- [Tennishead: serve plus one](https://tennishead.net/?p=192827)
 
 ### 3.6 Options
 Control remapping (P1 / P2 / per action, keyboard + gamepad button), master / music / SFX volume, mute (also **M** anywhere), Training HUD toggle, COM difficulty, career match length (short "first to 3 games" / full sets; Majors best-of-5 toggle), reduced screen shake, show FPS. Persisted in localStorage.

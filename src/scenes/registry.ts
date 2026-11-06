@@ -15,6 +15,8 @@ import { TrophyScene } from './trophy';
 import { VersusSetup } from './versus';
 import { PracticeSetup, makeTutorial, practiceMatch } from './practice';
 import { OptionsScene, RemapScene } from './options';
+import { TacticsSchool, LessonCard, makeLessonMatch } from './tactics-school';
+import { LESSONS, lessonById } from '../data/lessons';
 import { CareerMenu } from './career/menu';
 import { CreateScene } from './career/create';
 import { HubScene } from './career/hub';
@@ -68,6 +70,12 @@ export function registerScenes(): void {
     versus: () => new VersusSetup(),
     practice: () => new PracticeSetup(),
     tutorial: () => makeTutorial('hard'),
+    tactics: () => new TacticsSchool('hard', () => game.goto(new PracticeSetup())),
+    lesson: (p?: { id?: string; card?: 'intro' | 'done' }) => {
+      const l = lessonById(p?.id ?? 'cross') ?? LESSONS[0];
+      const back = () => game.goto(new PracticeSetup());
+      return p?.card ? new LessonCard(l, p.card, 'hard', back) : makeLessonMatch(l, 'hard', back);
+    },
     machine: (p?: { serve?: boolean }) => practiceMatch({ type: 'normal', side: 'mix', speed: 1, interval: 60, serve: !!p?.serve }, 'hard'),
     options: () => new OptionsScene(),
     remap: () => new RemapScene('solo', new OptionsScene()),

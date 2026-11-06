@@ -102,6 +102,9 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` verified
 - [x] Bug: untouched serves were never called "ACE!" (aces are now 3-6%).
 - [x] Tactic profiles still distinct (tactics.test) and career quick-sim pace unchanged (career-sim.test: it uses the stat sim).
 ### M17: Tactics School
+- [x] 8 lessons (GDD §3.5b): intro card → drill with target zones, stand-in opponent and progress pips → summary card linked to the matching AI game plan. Reached from Practice → Tactics School; progress saved in localStorage.
+- [x] Ball machine can feed short balls (`depth`) and wide balls (`wide`) for the attack and defence drills.
+- [x] *(lessons.test: every drill rule accepts the right shot and rejects wrong ones; tactics-school.spec: the autopilot follows each lesson's coaching hint and clears all 8 drills, progress saved, screenshots of every intro/drill/summary)*
 ### M18: Broadcast look: player art, forehand/backhand animations, TV scoreboard, sponsor boards, venues
 
 ---
