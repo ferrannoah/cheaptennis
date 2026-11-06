@@ -7,6 +7,7 @@ import { settings } from '../core/settings';
 import { PauseScene } from './pause';
 import { Player } from '../match/player';
 import { TACTICS } from '../data/tactics';
+import { text } from '../gfx/text';
 
 export interface MatchResult {
   winner: 0 | 1;
@@ -232,6 +233,7 @@ export class MatchScene implements Scene {
   draw(ctx: CanvasRenderingContext2D): void {
     this.view.draw(ctx, { hud: true, training: settings.trainingHud || !!this.m.practice });
     this.opts.practiceOverlay?.(ctx, this.m);
+    if (this.m.canSkipDowntime) text(ctx, 'SPACE  skip', W - 14, H - 14, { size: 10, align: 'right', color: '#d6e4f7', outline: '#13284a', weight: 700 });
     if (settings.showFps) {
       ctx.fillStyle = '#fff';
       ctx.font = '10px monospace';

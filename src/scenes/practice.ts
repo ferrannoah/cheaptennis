@@ -16,6 +16,7 @@ import { text, wrap } from '../gfx/text';
 import { audio } from '../core/audio';
 import { input } from '../core/input';
 import { HALF_LEN, SERVICE_Y } from '../data/court';
+import { matchCam } from '../gfx/camera';
 
 const FEEDS: (ShotType | 'random')[] = ['normal', 'topspin', 'slice', 'lob', 'random'];
 const FEED_LABEL: Record<string, string> = { normal: 'Normal', topspin: 'Topspin', slice: 'Slice', lob: 'Lob', random: 'Random mix' };
@@ -54,7 +55,34 @@ export function practiceMatch(feed: PracticeFeed, surface: SurfaceId, extra: Par
   return new MatchScene({
     surface, format: { kind: 'games', target: 99 }, players: [me, machine], controllers: [new Controller('p1', 'solo', 0), null],
     difficulty: settings.difficulty, seed: 77, practice: feed,
-  }, { onEnd: () => game.goto(new PracticeSetup()), onQuit: () => game.goto(new PracticeSetup()), ...extra });
+  }, { onEnd: () => game.goto(new PracticeSetup()), onQuit: () => game.goto(new PracticeSetup()), practiceOverlay: drawLanding, ...extra });
+}
+
+/** Marks where the player's last shot first bounced (green ring = in, red cross = out) until the next feed. */
+export function drawLanding(ctx: CanvasRenderingContext2D, m: Match): void {
+  const r = m.rally;
+  if (!m.practice || m.practice.serve || r.lastHitter !== 0 || r.bounces < 1) return;
+  const inside = r.firstBounceIn;
+  const c = matchCam.project(r.bounceX, r.bounceY, 0);
+  const pulse = 1 + 0.15 * Math.sin(m.frame * 0.25);
+  ctx.save();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = inside ? '#9ef07a' : '#ff7a6a';
+  ctx.beginPath();
+  const rx = 0.45 * c.s * pulse;
+  ctx.ellipse(c.x, c.y, rx, rx * 0.42, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  if (!inside) {
+    ctx.beginPath();
+    ctx.moveTo(c.x - 5, c.y - 5);
+    ctx.lineTo(c.x + 5, c.y + 5);
+    ctx.moveTo(c.x + 5, c.y - 5);
+    ctx.lineTo(c.x - 5, c.y + 5);
+    ctx.stroke();
+  }
+  ctx.restore();
+  text(ctx, inside ? 'IN' : 'OUT', c.x, c.y - 12, { size: 10, align: 'center', color: inside ? '#9ef07a' : '#ff9a8a', outline: '#13284a' });
+  if (r.dead) text(ctx, `${keyLabel(settings.keys.solo.normal[0])}  next ball`, W - 14, H - 14, { size: 10, align: 'right', color: '#d6e4f7', outline: '#13284a', weight: 700 });
 }
 
 export function startPractice(feed: PracticeFeed, surface: SurfaceId): void {
@@ -81,6 +109,9 @@ interface TutState {
   done: boolean;
   doneT: number;
   awaitBounce: boolean;
+  /** goal reached: wait for the current ball to play out before the next step */
+  pending: boolean;
+  pendingT: number;
 }
 
 function K(a: 'normal' | 'topspin' | 'slice' | 'lob' | 'drop' | 'left' | 'right' | 'up' | 'down'): string {
@@ -159,15 +190,20 @@ function steps(): Step[] {
   ];
 }
 
+/** frames to show a finished step's last shot before moving on (~0.75 s) */
+const TUT_STEP_PAUSE = 45;
+
 export function startTutorial(surface: SurfaceId): void {
   game.goto(makeTutorial(surface));
 }
 
 export function makeTutorial(surface: SurfaceId): MatchScene {
   const S = steps();
-  const st: TutState = { step: 0, count: 0, moved: 0, lastX: 0, lastY: 0, done: false, doneT: 0, awaitBounce: false };
+  const st: TutState = { step: 0, count: 0, moved: 0, lastX: 0, lastY: 0, done: false, doneT: 0, awaitBounce: false, pending: false, pendingT: 0 };
   let ms: MatchScene;
   const advance = (m: Match) => {
+    st.pending = false;
+    st.pendingT = 0;
     st.step++;
     st.count = 0;
     st.lastX = 0;
@@ -183,16 +219,23 @@ export function makeTutorial(surface: SurfaceId): MatchScene {
   };
   const onEvent = (e: Match['events'][number], m: Match) => {
     const s = S[st.step];
-    if (!s || !s.check) return;
+    if (!s || !s.check || st.pending) return;
     if (s.check(e, m, st)) {
       st.count++;
       audio.sfx('menu_ok');
-      if (st.count >= s.goal) advance(m);
+      if (st.count >= s.goal) st.pending = true;
     }
   };
   const onUpdate = (m: Match) => {
     const s = S[st.step];
     if (!s || st.done) return;
+    if (st.pending) {
+      // let the shot finish (bounce out, net or second bounce), show the result, then move on
+      const finished = m.rally.dead || (!m.ballLive && !m.ballVisible);
+      if (finished) st.pendingT++;
+      if (st.pendingT >= TUT_STEP_PAUSE || (st.pendingT > 15 && input.menu('ok'))) advance(m);
+      return;
+    }
     if (st.step === 0) {
       const p = m.players[0];
       st.moved += Math.hypot(p.vx, p.vy) / 60;
@@ -203,6 +246,8 @@ export function makeTutorial(surface: SurfaceId): MatchScene {
   const overlay = (ctx: CanvasRenderingContext2D, m: Match) => {
     const s = S[st.step];
     if (!s) return;
+    drawLanding(ctx, m);
+    if (st.pending) text(ctx, 'STEP COMPLETE!', W / 2, 150, { size: 20, align: 'center', color: '#9ef07a', outline: '#13284a' });
     const w = 420;
     const lines = wrap(ctx, s.body, 11, w - 24, 700);
     const h = 44 + lines.length * 15;
@@ -227,7 +272,7 @@ export function makeTutorial(surface: SurfaceId): MatchScene {
   ms = practiceMatch(S[0].feed!, surface, { onEvent, onUpdate, practiceOverlay: overlay });
   ms.name = 'tutorial';
   const base = ms.debugState.bind(ms);
-  ms.debugState = () => ({ ...base(), tutStep: st.step, tutCount: st.count, tutTitle: S[st.step]?.title });
+  ms.debugState = () => ({ ...base(), tutStep: st.step, tutCount: st.count, tutTitle: S[st.step]?.title, tutPending: st.pending });
   return ms;
 }
 

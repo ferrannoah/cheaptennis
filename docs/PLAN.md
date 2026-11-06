@@ -88,6 +88,15 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` verified
 - **Publish:** create the GitHub repo **`cheaptennis`** and deploy to **GitHub Pages** via a GitHub Actions workflow (as requested in chat; this overrides the "no deployment" line in the original brief).
 - **Accept:** preview build plays with no console errors; the Pages URL loads and plays.
 
+## Playtest round 1 (from NOTES.md, prompt in docs/NEXT_PROMPT.md)
+### M15: Quick fixes
+- [x] One arrow tap moves a menu one row; holding repeats after 22 frames, then every 6. *(menu-input.spec: real key events held 1/3/8/15 frames move exactly 1 row on the title and Exhibition menus; a 40-frame hold moves 2-4)*
+- [x] Space skips the dead time and the walk to position between points (also changeovers); the press does not toss. A "SPACE skip" hint shows when available. *(skip-walk.spec: point is scored, players snapped, serve still 'ready')*
+- [x] Practice/tutorial: each shot plays out (IN ring / OUT cross on the landing spot, OUT/NET calls), then a 1 s pause before the next feed (Space skips after 0.25 s). A tutorial step finished by a hit waits for that ball, shows STEP COMPLETE!, then moves on. *(practice-playout.spec)*
+### M16: Speed balance: measure, then retune (see NEXT_PROMPT.md B)
+### M17: Tactics School
+### M18: Broadcast look: player art, forehand/backhand animations, TV scoreboard, sponsor boards, venues
+
 ---
 
 ## Definition of Done (verify each item)
@@ -105,7 +114,7 @@ Evidence: `npm test` (Vitest, 45 tests) and `npx playwright test` (Playwright vi
 - [x] Practice/tutorial, audio + mute, options and remapping. *(modes.spec: ball machine, serve practice, tutorial steps; audio.spec; remap rebinding swing to Q works in a match)*
 - [x] `npm run build` + `npm run preview` work locally. *(PREVIEW=1 playtests pass against the built bundle; 198 KB JS, 69 KB gzipped)*
 - [x] (added after approval) AI game plans: 5 tactics, per-player blends, per-point selection, in-match adaptation, Exhibition picker, HUD/stat-card/scouting display. *(tactics.test: each forced tactic measurably distinct in AI-vs-AI play; blend + adaptation unit tests; surface matchup in the stat sim; tactics.spec screenshots + plans vary across points)*
-- [ ] Published to GitHub Pages from repo `cheaptennis` and verified loading there. **Deferred by the user**: workflow `.github/workflows/pages.yml` + README steps are ready; needs Git + `gh auth login`.
+- [x] Published to GitHub Pages from the public repo `ferrannoah/cheaptennis`; every push to `main` tests, builds and deploys. *(live at https://ferrannoah.github.io/cheaptennis/, title screen loads with no console errors)*
 - [x] (oneshot skill) Zero TS errors; no console errors; audio only after a gesture; renders at 60+ fps with particles capped at 400; settings/career persist via try/catch'd localStorage; README with controls / run / build / deploy.
 
 ---
@@ -114,3 +123,4 @@ Evidence: `npm test` (Vitest, 45 tests) and `npx playwright test` (Playwright vi
 - 2026-11-05: GDD + PLAN written and approved (local build now, GitHub publish planned for the end).
 - 2026-11-05: M0-M12 built and verified; M13 polish, README, Pages workflow prepared; all unit + browser tests green. Per-milestone git commits skipped (Git not installed, per the user's choice).
 - 2026-11-05: M14 AI game plans added (user request). While measuring it, found and fixed an AI bug: the COM's chosen aim was being dropped at contact, so every AI shot went down the middle. Rallies went from ~10-12 shots to ~6-8. The AI now also leaves balls that are going out and has a human-like 0.15-0.3 s reaction time.
+- 2026-11-06: Git set up; repo `ferrannoah/cheaptennis` (public) with auto-deploy to GitHub Pages. M15 quick fixes done (menu double-step, skip between points, practice shots play out).

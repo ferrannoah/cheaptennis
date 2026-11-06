@@ -191,6 +191,7 @@ export class Match {
       if (p.meterShow > 0) p.meterShow--;
       p.sweat = p.staminaF() < 0.35 ? 1 : 0;
     }
+    this.trySkipDowntime();
     switch (this.phase) {
       case 'intro':
         this.ballVisible = false;
@@ -226,6 +227,46 @@ export class Match {
   setPhase(p: Phase): void {
     this.phase = p;
     this.phaseT = 0;
+  }
+
+  /** frame until which a human serve toss is ignored (the skip press must not also toss) */
+  private skipLockUntil = 0;
+  skips = 0;
+
+  /**
+   * Between points a human can press the shot button to skip the dead time and the walk
+   * back to position: the point is scored at once and both players snap to their spots.
+   */
+  get canSkipDowntime(): boolean {
+    if (this.practice || !this.players.some((p) => p.ctrl)) return false;
+    return (
+      (this.phase === 'dead' && this.phaseT >= T.skipMinDeadFrames) ||
+      this.phase === 'changeover' ||
+      (this.phase === 'serve' && this.players.some((p) => p.autoWalk))
+    );
+  }
+
+  private trySkipDowntime(): void {
+    if (!this.canSkipDowntime) return;
+    if (!this.players.some((p) => p.ctrl?.pressed('normal'))) return;
+    if (this.phase === 'dead') {
+      this.phaseT = Math.max(this.phaseT, this.deadAction === 'point' ? 80 : 55);
+      this.updateDead();
+    }
+    if (this.phase === 'changeover') this.setPhase('serve');
+    if (this.phase !== 'serve') return;
+    for (const p of this.players) {
+      if (p.autoWalk) {
+        p.x = p.autoWalk.x;
+        p.y = p.autoWalk.y;
+        p.autoWalk = null;
+      }
+      p.vx = p.vy = 0;
+      p.swing = null;
+    }
+    this.phaseT = 1;
+    this.skipLockUntil = this.frame + T.skipTossLock;
+    this.skips++;
   }
 
   private walkPlayers(celebrating = false): void {
@@ -283,7 +324,9 @@ export class Match {
       const ax = c.axis();
       mx = ax.x;
       aimX = ax.x;
-      if (sv.phase === 'ready' && (c.pressed('normal') || c.pressed('topspin') || c.pressed('slice'))) toss = true;
+      if (this.frame < this.skipLockUntil) {
+        // the skip press must not also start the toss
+      } else if (sv.phase === 'ready' && (c.pressed('normal') || c.pressed('topspin') || c.pressed('slice'))) toss = true;
       else if (sv.phase === 'toss' && sv.t > 3) {
         if (c.pressed('normal')) {
           hit = true;
@@ -746,9 +789,11 @@ export class Match {
 
   private endPoint(winner: 0 | 1, how: string, call: string, already = false): void {
     if (this.practice) {
+      // the ball keeps flying (visible) so the player sees where the shot went
       this.rally.dead = true;
       this.ballLive = false;
-      this.practiceFeedT = 50;
+      this.practiceFeedT = T.practiceAfterShot;
+      if (call && !already) this.emit({ t: 'call', text: call, kind: how === 'out' ? 'out' : how === 'net' ? 'net' : 'info' });
       return;
     }
     this.rally.dead = true;
@@ -839,6 +884,9 @@ export class Match {
     }
     if (this.ballLive && !this.rally.dead) return;
     if (this.practiceFeedT > 0) {
+      // after a shot has played out, the shot button skips the rest of the wait
+      const waited = T.practiceAfterShot - this.practiceFeedT;
+      if (this.rally.dead && waited >= T.practiceSkipAfter && this.players[0].ctrl?.pressed('normal')) this.practiceFeedT = 1;
       this.practiceFeedT--;
       if (this.practiceFeedT === 0) this.feed();
       return;
@@ -877,6 +925,10 @@ export class Match {
       sets: [...this.score.sets],
       winner: this.score.winner,
       faults: this.serveFaults,
+      phaseT: this.phaseT,
+      skips: this.skips,
+      canSkip: this.canSkipDowntime,
+      walking: this.players.some((p) => p.autoWalk),
       ball: { x: r2(this.ball.x), y: r2(this.ball.y), z: r2(this.ball.z), vx: r2(this.ball.vx), vy: r2(this.ball.vy), vz: r2(this.ball.vz), spin: r2(this.ball.spin) },
       ballLive: this.ballLive,
       tactics: this.ais.map((a) => (a ? a.tactic : null)),

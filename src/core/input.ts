@@ -109,6 +109,7 @@ class InputSystem {
         } else m.set(a, f - 1);
       }
     }
+    this.updateMenuRepeat();
   }
 
   vpress(id: string, action: Action | MenuAction, frames: number): void {
@@ -149,34 +150,50 @@ class InputSystem {
   }
 
   // ---------------- menu input (any device) ----------------
+  private menuFired = new Set<MenuAction>();
+
+  /** Resolve menu directions once per frame: one tap = one step; holding repeats after a delay. */
+  private updateMenuRepeat(): void {
+    this.menuFired.clear();
+    for (const a of MENU_DIRS) {
+      const keys = MENU_KEYS[a];
+      let edge = keys.some((k) => this.pressedNow.has(k));
+      let h = keys.some((k) => this.held.has(k));
+      for (let i = 0; i < 4; i++) {
+        const p = this.pads[i];
+        if (!p?.connected) continue;
+        if (MENU_PAD[a].some((b) => this.padPressed(i, b))) edge = true;
+        const ax = a === 'left' ? -(p.axes[0] ?? 0) : a === 'right' ? p.axes[0] ?? 0 : a === 'up' ? -(p.axes[1] ?? 0) : p.axes[1] ?? 0;
+        if (ax > 0.6 || MENU_PAD[a].some((b) => p.buttons[b])) h = true;
+      }
+      const t = this.repeat.get(a) ?? 0;
+      if (edge) {
+        this.menuFired.add(a);
+        this.repeat.set(a, 1);
+      } else if (h) {
+        this.repeat.set(a, t + 1);
+        if (t === 0) this.menuFired.add(a); // stick pushed without a button edge
+        else if (t >= MENU_REPEAT_DELAY && (t - MENU_REPEAT_DELAY) % MENU_REPEAT_EVERY === 0) this.menuFired.add(a);
+      } else this.repeat.set(a, 0);
+    }
+  }
+
   menu(a: MenuAction): boolean {
     if (this.vpressed('menu', a)) return true;
-    const keys = MENU_KEYS[a];
-    for (const k of keys) if (this.pressedNow.has(k)) return true;
+    if (a === 'up' || a === 'down' || a === 'left' || a === 'right') return this.menuFired.has(a);
+    for (const k of MENU_KEYS[a]) if (this.pressedNow.has(k)) return true;
     for (let i = 0; i < 4; i++) {
       const p = this.pads[i];
       if (!p?.connected) continue;
       for (const b of MENU_PAD[a]) if (this.padPressed(i, b)) return true;
     }
-    // repeat for directions (held keys / stick)
-    if (a === 'up' || a === 'down' || a === 'left' || a === 'right') {
-      let h = keys.some((k) => this.held.has(k));
-      for (let i = 0; i < 4; i++) {
-        const p = this.pads[i];
-        if (!p?.connected) continue;
-        const ax = a === 'left' ? -(p.axes[0] ?? 0) : a === 'right' ? p.axes[0] ?? 0 : a === 'up' ? -(p.axes[1] ?? 0) : p.axes[1] ?? 0;
-        if (ax > 0.6 || MENU_PAD[a].some((b) => p.buttons[b])) h = true;
-      }
-      const t = this.repeat.get(a) ?? 0;
-      if (h) {
-        this.repeat.set(a, t + 1);
-        if (t === 0 && !keys.some((k) => this.pressedNow.has(k))) return true; // stick first push
-        if (t > 22 && (t - 22) % 6 === 0) return true;
-      } else this.repeat.set(a, 0);
-    }
     return false;
   }
 }
+
+const MENU_DIRS = ['up', 'down', 'left', 'right'] as const;
+const MENU_REPEAT_DELAY = 22;
+const MENU_REPEAT_EVERY = 6;
 
 export type MenuAction = 'up' | 'down' | 'left' | 'right' | 'ok' | 'back' | 'pause';
 const MENU_KEYS: Record<MenuAction, string[]> = {

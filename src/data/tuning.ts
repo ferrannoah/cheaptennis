@@ -45,6 +45,10 @@ export const T = {
   diveDrain: 4.5,
   rallyDrain: 0.45, // per shot after shot 8
   pointRecover: 12,
+  skipMinDeadFrames: 12, // the call is visible this long before a skip press is accepted
+  skipTossLock: 8, // frames after a skip in which the serve toss ignores the press
+  practiceAfterShot: 60, // practice: pause after a shot has played out before the next feed
+  practiceSkipAfter: 15, // practice: the shot button can skip the pause after this many frames
   changeoverRecover: 30,
   setRecover: 50,
   lowStamina: 40,
