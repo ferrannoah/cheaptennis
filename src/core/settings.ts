@@ -52,6 +52,8 @@ export interface Settings {
   majorsBo5: boolean;
   reducedShake: boolean;
   showFps: boolean;
+  /** in-match panel showing what tiredness is costing (toggle with H) */
+  fatigueInfo: boolean;
 }
 
 function defaults(): Settings {
@@ -69,6 +71,7 @@ function defaults(): Settings {
     majorsBo5: false,
     reducedShake: false,
     showFps: false,
+    fatigueInfo: false,
   };
 }
 

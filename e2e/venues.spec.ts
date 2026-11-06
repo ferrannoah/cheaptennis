@@ -17,6 +17,12 @@ test('venues: each surface regular + Major, first round vs final, night session,
   await goto(page, 'match', { surface: 'hard', ai: true, seed: 4, venue: { tier: 'tour', stage: 0.5, night: true } });
   await adv(page, 160);
   await shot(page, 'venue-hard-night');
+  // crowd grows with the event level (career: Futures 0 .. Major 5)
+  for (const level of [0, 1, 2, 4]) {
+    await goto(page, 'match', { surface: level % 2 ? 'clay' : 'hard', ai: true, seed: 4, venue: { tier: 'tour', level, stage: 0.3 } });
+    await adv(page, 160);
+    await shot(page, `venue-level-${level}`);
+  }
   // the final: flash burst after match point
   await goto(page, 'match', { surface: 'grass', ai: true, seed: 9, format: '1game', venue: { tier: 'major', stage: 1, name: NAMES.grass, round: 'Final' } });
   const s = await page.evaluate(() => (window as any).__game.runUntil('s => s.phase === "over"', 30000, 10));

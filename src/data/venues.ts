@@ -1,7 +1,7 @@
 /**
  * Venues (M18): the stadium look around the court. Each surface has its own theme; Majors get a
  * grander version; the atmosphere builds through the rounds (`stage` 0 = first round, 1 = final).
- * All sponsor names are made up (no real brands or trademarks).
+ * No advertising: courtside walls are plain themed windscreens.
  */
 import type { SurfaceId } from './surfaces';
 
@@ -48,24 +48,33 @@ export const THEMES: Record<string, VenueTheme> = {
   },
 };
 
-/** Fictional sponsors for the boards. The first one is the "timekeeper" with the clock board. */
-export const SPONSORS = ['CHRONOVA', 'AURELIA', 'NORDLINE BANK', 'VANTAGE AIR', 'SOLACE WATER', 'KESTREL MOTORS', 'LUMEN', 'PIXELFOX'];
-
 export type VenueTier = 'practice' | 'tour' | 'major' | 'final';
 
 export interface Venue {
   theme: VenueTheme;
   tier: VenueTier;
+  /**
+   * size of the event 0..5: 0 Futures / practice (park court, tiny bleachers), 1 Challenger,
+   * 2 Tour 250, 3 Tour 500 (Exhibition / Tournament default), 4 Masters 1000, 5 Major / Tour Finals
+   */
+  level: number;
   /** 0 = first round .. 1 = final */
   stage: number;
-  /** event name for the wall (Majors) and the intro card */
+  /** event name for the court (Majors) and the intro card */
   name: string;
   /** e.g. "QUARTERFINAL" for the walk-on card */
   round: string;
 }
 
 export interface VenueLook {
+  /** side stand rows */
   standRows: number;
+  /** far stand rows (0 = none) */
+  farRows: number;
+  /** y range the side stands cover */
+  sideRange: [number, number];
+  /** park court: aluminium bleachers, grass and trees instead of a stadium */
+  park: boolean;
   /** chance a seat is empty */
   empty: number;
   /** crowd noise multiplier for applause */
@@ -79,26 +88,33 @@ export interface VenueLook {
   introCard: boolean;
 }
 
-/** How a venue looks and sounds: grander for Majors, fuller and louder as the event goes on. */
+/** How a venue looks and sounds: small events are near-empty park courts; the crowd grows with the level and the round. */
 export function venueLook(v: Venue): VenueLook {
-  const major = v.tier === 'major' || v.tier === 'final';
   const s = Math.max(0, Math.min(1, v.stage));
-  if (v.tier === 'practice') return { standRows: 7, empty: 0.85, noise: 0.4, flashes: 0, banners: false, photographers: false, wallName: false, introCard: false };
-  return {
-    standRows: major ? 10 : 7,
-    empty: major ? 0.14 - 0.13 * s : 0.3 - 0.24 * s,
-    noise: (major ? 1.05 : 0.85) + 0.35 * s,
-    flashes: (major ? 4 : 1.5) * (0.3 + s),
-    banners: major,
-    photographers: major || s >= 0.75,
-    wallName: major,
-    introCard: s >= 0.6,
-  };
+  const L = Math.max(0, Math.min(5, Math.round(v.level)));
+  const full: [number, number] = [-24, 25];
+  const base = { banners: false, photographers: false, wallName: false, introCard: false, flashes: 0 };
+  if (v.tier === 'practice') return { ...base, standRows: 2, farRows: 0, sideRange: [-6, 13], park: true, empty: 0.97, noise: 0.25 };
+  switch (L) {
+    case 0: return { ...base, standRows: 2, farRows: 0, sideRange: [-6, 13], park: true, empty: 0.72 - 0.2 * s, noise: 0.3 + 0.15 * s };
+    case 1: return { ...base, standRows: 3, farRows: 2, sideRange: [-13, 18], park: true, empty: 0.5 - 0.2 * s, noise: 0.45 + 0.2 * s, flashes: 0.3 * s };
+    case 2: return { ...base, standRows: 5, farRows: 4, sideRange: full, park: false, empty: 0.36 - 0.2 * s, noise: 0.65 + 0.25 * s, flashes: 1 * (0.3 + s), introCard: s >= 0.6 };
+    case 3: return { ...base, standRows: 7, farRows: 7, sideRange: full, park: false, empty: 0.3 - 0.24 * s, noise: 0.85 + 0.35 * s, flashes: 1.5 * (0.3 + s), photographers: s >= 0.75, introCard: s >= 0.6 };
+    case 4: return { ...base, standRows: 8, farRows: 8, sideRange: full, park: false, empty: 0.2 - 0.17 * s, noise: 0.95 + 0.35 * s, flashes: 2.5 * (0.3 + s), photographers: s >= 0.5, introCard: s >= 0.6 };
+    default: return { standRows: 10, farRows: 10, sideRange: full, park: false, empty: 0.14 - 0.13 * s, noise: 1.05 + 0.35 * s, flashes: 4 * (0.3 + s), banners: true, photographers: true, wallName: true, introCard: s >= 0.6 };
+  }
 }
 
-export function venueFor(surface: SurfaceId, opts: { tier?: VenueTier; stage?: number; name?: string; round?: string; night?: boolean } = {}): Venue {
+/** venue level from a career tier id */
+export function levelForTier(tier: string): number {
+  return ({ f15: 0, f25: 0, c75: 1, c125: 1, t250: 2, t500: 3, m1000: 4, major: 5, finals: 5 } as Record<string, number>)[tier] ?? 3;
+}
+
+export function venueFor(surface: SurfaceId, opts: { tier?: VenueTier; level?: number; stage?: number; name?: string; round?: string; night?: boolean } = {}): Venue {
   const themeId = surface === 'hard' && opts.night ? 'hardNight' : surface;
-  return { theme: THEMES[themeId], tier: opts.tier ?? 'tour', stage: opts.stage ?? 0.4, name: opts.name ?? '', round: opts.round ?? '' };
+  const tier = opts.tier ?? 'tour';
+  const level = opts.level ?? (tier === 'major' || tier === 'final' ? 5 : tier === 'practice' ? 0 : 3);
+  return { theme: THEMES[themeId], tier, level, stage: opts.stage ?? 0.4, name: opts.name ?? '', round: opts.round ?? '' };
 }
 
 /** stage 0..1 from a knockout round: players left vs. draw size */
@@ -111,5 +127,5 @@ export function stageFromDraw(size: number, playersLeft: number): number {
 /** cache key for pre-rendered layers */
 export function venueKey(v: Venue): string {
   const l = venueLook(v);
-  return `${v.theme.id}|${v.tier}|${l.standRows}|${Math.round(l.empty * 20)}|${l.banners ? v.name : ''}`;
+  return `${v.theme.id}|${v.tier}|${v.level}|${l.standRows}|${l.farRows}|${l.park}|${l.banners ? v.name : ''}`;
 }

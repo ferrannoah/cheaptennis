@@ -126,13 +126,15 @@ export function pureBlend(id: TacticId): TacticBlend {
 }
 
 /** Top tactics of a blend, e.g. "Grind 60% · Counter 30%". */
+/** Pregame scouting: the main styles by name only (the exact mix stays hidden). */
 export function blendLabel(b: TacticBlend, n = 2): string {
-  return TACTIC_IDS.slice()
+  const top = TACTIC_IDS.slice()
     .sort((a, c) => b[c] - b[a])
     .slice(0, n)
-    .filter((k) => b[k] > 0.04)
-    .map((k) => `${TACTICS[k].name} ${Math.round(b[k] * 100)}%`)
-    .join('  •  ');
+    .filter((k) => b[k] > 0.1)
+    .map((k) => TACTICS[k].name);
+  if (!top.length) return 'All-round';
+  return top.length === 1 ? `Mostly ${top[0]}` : `Mostly ${top[0]}, also ${top.slice(1).join(', ')}`;
 }
 
 export function dominant(b: TacticBlend): TacticId {

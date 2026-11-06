@@ -4,6 +4,7 @@ import { T } from '../data/tuning';
 import { Surface } from '../data/surfaces';
 import { HALF_LEN, RUN_X, RUN_Y } from '../data/court';
 import { Grade } from './shots';
+import { moveFatigue, timingFatigue } from './fatigue';
 
 export type AnimState = 'idle' | 'run' | 'swing' | 'serve' | 'dive' | 'celebrate' | 'slump' | 'walk';
 
@@ -90,16 +91,12 @@ export class Player {
 
   /** multiplier on movement from stamina */
   speedMul(): number {
-    const f = this.staminaF();
-    return f < T.lowStamina / 100 ? 0.8 + 0.5 * f : 1;
+    return moveFatigue(this.staminaF());
   }
 
   /** multiplier on timing windows */
   windowMul(): number {
-    const f = this.staminaF();
-    let w = 0.82 + 0.36 * (this.stats.mental / 99);
-    if (f < T.lowStamina / 100) w *= 0.55 + f * 1.1;
-    return w;
+    return (0.82 + 0.36 * (this.stats.mental / 99)) * timingFatigue(this.staminaF());
   }
 
   maxSpeed(sf: Surface): number {

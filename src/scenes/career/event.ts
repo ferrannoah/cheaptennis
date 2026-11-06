@@ -20,7 +20,7 @@ import { flipScore } from '../../sim/bracket';
 import { audio } from '../../core/audio';
 import { TrophyScene } from '../trophy';
 import { ovr } from '../../data/types';
-import { venueFor, stageFromDraw } from '../../data/venues';
+import { venueFor, stageFromDraw, levelForTier } from '../../data/venues';
 
 export class EventScene extends MenuScene {
   name = 'event';
@@ -65,7 +65,9 @@ export class EventScene extends MenuScene {
     // stadium: Majors and the Tour Finals get the grand venue (qualifying is on an outside court)
     const tier = hm.isQual ? 'tour' : run.tier === 'major' ? 'major' : run.tier === 'finals' ? 'final' : 'tour';
     const stage = hm.isQual ? 0 : hm.finalsIdx ? { rr: 0.6, sf: 0.85, f: 1 }[hm.finalsIdx.stage] : hm.bracket ? stageFromDraw(hm.bracket.size, hm.bracket.playersLeft()) : 0.4;
-    const venue = venueFor(ev.surface, { tier, stage, name: ev.name, round: hm.label });
+    // crowd size follows the event: Futures are park courts with a few bleachers; qualifying is one level smaller
+    const level = Math.max(0, levelForTier(run.tier) - (hm.isQual ? 1 : 0));
+    const venue = venueFor(ev.surface, { tier, level, stage, name: ev.name, round: hm.label });
     const start = () =>
       game.goto(new MatchScene({ surface: ev.surface, format: fmt, players: [me, opp], controllers: [new Controller('p1', 'solo', 0), null], difficulty: settings.difficulty, seed: season.rng.int(0, 1e9), venue }, {
         title: `${ev.name.toUpperCase()} • ${hm.label.toUpperCase()}`,
@@ -161,7 +163,7 @@ export class EventScene extends MenuScene {
       const pro = season.byKey.get(hm.opponent);
       const rk = season.rankOf(hm.opponent);
       text(ctx, `Next: ${hm.label} vs ${season.nameOf(hm.opponent)}${rk ? ' (#' + rk + ')' : ''}${pro ? '  •  OVR ' + ovr(pro.stats) : ''}`, W / 2, 340, { size: 13, align: 'center', color: '#ffd479', outline: '#13284a' });
-      if (pro) text(ctx, `Scouting report: ${blendLabel(proBlend(pro), 3)}`, W / 2, 357, { size: 10, align: 'center', color: '#d6e4f7', outline: '#13284a', weight: 700 });
+      if (pro) text(ctx, `Scouting report: ${blendLabel(proBlend(pro), 2)}`, W / 2, 357, { size: 10, align: 'center', color: '#d6e4f7', outline: '#13284a', weight: 700 });
     } else {
       text(ctx, run.humanResult === 'W' ? 'CHAMPION!' : run.humanOut ? `Out in the ${run.humanResult || 'event'}` : 'Event complete', W / 2, 350, { size: 15, align: 'center', color: '#ffd479', outline: '#13284a' });
     }

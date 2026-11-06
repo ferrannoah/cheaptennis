@@ -57,10 +57,8 @@ A fixed, high, slightly tilted broadcast camera behind the near baseline. A real
     - grass: cream stands, dark green and purple, ivy along the walls
     - clay: terracotta and navy, an open-air bowl
     - hard: blue and teal, with a **night session** option in Exhibition (darkened stands, floodlit court)
-  - **Sponsor boards** in the classic pro-event look, with made-up brands only (no real trademarks):
-    - dark boards with metallic lettering on the back and side walls
-    - a big analogue **clock board** (CHRONOVA) showing the real time
-    - a live **SERVE SPEED** display
+  - **Courtside walls:** plain themed windscreens with a thin accent rule. No advertising (sponsor boards were removed in M19 after playtesting).
+  - **Size by event level (M19):** 0 Futures / practice (park court, grass and trees, two-row aluminium bleachers along part of each side, a sparse crowd) → 1 Challenger (small bleachers, a few far rows) → 2 Tour 250 → 3 Tour 500 (Exhibition / Tournament default) → 4 Masters 1000 → 5 Major / Tour Finals. Career qualifying is one level smaller than its event.
   - **Majors and the Tour Finals** add:
     - taller, fuller stands
     - banners on the side stands
@@ -86,7 +84,8 @@ A fixed, high, slightly tilted broadcast camera behind the near baseline. A real
 
   The point box flashes when the score changes. On big points a tab slides out to the right: **BREAK POINT / SET POINT (GAME POINT in short formats) / MATCH POINT / TIEBREAK** (`Score.pressureLabel`).
 - **Stamina:** two small bars (far player under the scoreboard, near player bottom-left), green → yellow → **red** when low, pulsing when critical.
-- **"SPACE skip"** hint bottom-right whenever the time between points can be skipped.
+- **"SPACE skip"** hint bottom-right whenever the time between points can be skipped; skipping also clears the point's popups, umpire call and banners.
+- **Fatigue details (H, M19):** a chip by each human's stamina bar; H shows/hides a panel listing what tiredness is costing right now: top speed, acceleration, timing window, shot accuracy, shot power, serve speed and serve accuracy, in %. The numbers come from `src/match/fatigue.ts`, the same functions the physics uses. The setting is saved.
 - **Timing popup:** small arc meter by the hitting player + a text popup with the grade and reason.
 - **Umpire calls:** centred pop-up text ("OUT!", "FAULT!", "LET", "DEUCE", "ADVANTAGE YOU", "GAME", "SET", "MATCH").
 - Optional **Training HUD:** predicted landing spot marker and the timing window band on the arc meter.
@@ -216,7 +215,7 @@ Five tactics based on common singles coaching patterns (all values in `src/data/
 - **Before each point** the COM picks one plan from its blend, weighted by the situation: serving or returning, surface (grass favours Net/Serve + 1, clay favours Grind/Counter), its stamina (tired = shorter points), your weaker wing (fewer Forehand Dominance points if your backhand is solid), your net-rushing (more Counterpunch), and big points (it sticks to its most trusted plan).
 - **In-match adaptation:** a plan that wins a point gets more weight and one that loses gets less, anchored to the player's natural style. When the main plan flips, a "CHANGES TACTICS" popup appears.
 - **Risk/reward:** attacking plans hit with more power and more error (Serve + 1's first strike: +15% pace); Grind plays safer.
-- **Visible:** a `PLAN:` chip under the COM stamina bar every point; the game-plan line on the stat card; a scouting report on the career event screen.
+- **Visible (M19):** only before the match, and only by name: the stat card says e.g. "Mostly Net Attack, also Serve + 1", and the career event screen shows the same scouting report. During play the plan is hidden (no chip, no "changes tactics" popup); you read it from how they play.
 - **Exhibition:** pick the COM's natural blend, any single forced tactic (no adapting), or a random blend.
 - **Stat sim:** blends shift point odds slightly by surface fit and matchups (Net beats Grind, Counter beats Net, Serve + 1 beats Counter, Grind beats Serve + 1, Forehand Dominance beats Grind), so tournament and career results reflect styles too.
 

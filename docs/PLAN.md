@@ -111,6 +111,15 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` verified
 - [x] Broadcast scoreboard with set columns, a point box and a BREAK/SET/MATCH POINT tab. *(scoring.test: `pressureLabel`; scoreboard.spec screenshots)*
 - [x] Venues: surface themes, made-up sponsor boards, a live clock and serve-speed display, a hard-court night session (Exhibition → Session). Majors and Finals get taller stands, banners, a painted event name and photographers. The crowd fills up and gets louder through the rounds, there's a walk-on card from the QF on, and a camera-flash burst after match point in a final. Career, Tournament and Exhibition all pass their venue. *(venues.spec: every surface regular/Major × R1/Final + night; a full Major crowd draws in under 1 ms per frame headless)*
 
+## Playtest round 2 (NOTES.md, 2026-11-06)
+### M19: Cleanup + fatigue info + venue scale
+- [x] **No ads:** courtside boards are plain themed windscreens (no sponsor names, no branded clock, no serve-speed board). The serve speed stays in the on-court popup. *(venue screenshots)*
+- [x] **COM plan hidden in play:** no PLAN chip and no "CHANGES TACTICS" popup during matches. The stat card and career scouting report show style names only ("Mostly Net Attack, also Serve + 1"), with no percentages. *(statcard screenshot)*
+- [x] **Fatigue details (H):** H toggles a panel by your stamina bar showing top speed, acceleration, timing window, shot accuracy, shot power, serve speed and serve accuracy in %. The setting is saved, an "H fatigue" chip sits by the bar, and H is ignored when it's a shot key (keyboard versus). The values come from `src/match/fatigue.ts`, which the physics now uses too. *(fatigue.test: 0% fresh, worse when tired, same as Player; fatigue.spec: toggle + screenshot)*
+- [x] **Racket/arm draw order:** each pose has a racket-arm and off-arm depth, interpolated. The near (back-view) player hides a racket held in front of the chest behind the body and draws a wrapped follow-through over the head; the far player is the reverse. *(pose gallery screenshots, back + front)*
+- [x] **Crowd scales with the event:** venue level 0-5 from the career tier, with qualifying one level smaller. Futures and practice use a park court with two-row bleachers and a sparse crowd. Challengers get small stands, then 250 / 500 / 1000 grow, and Majors and Finals are full stadiums. *(venues.spec: level 0/1/2/4 screenshots)*
+- [x] **Skip clears the point UI:** the Space skip also dismisses the umpire call, popups and banners. *(skip-walk.spec asserts call/popups/banner are empty after a skip)*
+
 ---
 
 ## Definition of Done (verify each item)

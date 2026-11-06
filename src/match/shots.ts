@@ -4,6 +4,7 @@ import { GRAVITY, HALF_W, netHeightAt } from '../data/court';
 import { Stats, ShotType, ServeType } from '../data/types';
 import { Rng } from '../core/rng';
 import { T } from '../data/tuning';
+import { errorFatigue, paceFatigue, serveFatigue, serveErrorFatigue } from './fatigue';
 
 export type Grade = 'PERFECT' | 'GOOD' | 'EARLY' | 'LATE' | 'MISHIT';
 
@@ -185,7 +186,7 @@ export function makeShot(inp: ShotInput, sf: Surface): ShotOutput {
   const lowF = !inp.volley && inp.contactZ < 0.4 ? 1 + (0.4 - inp.contactZ) * 3 : 1;
   const highF = !inp.overhead && inp.contactZ > 1.75 ? 1 + (inp.contactZ - 1.75) * 0.8 : 1;
   const jamF = inp.lateral < 0.25 ? 1.35 : 1;
-  const tiredF = f < T.lowStamina / 100 ? 1 + (T.lowStamina / 100 - f) * 2.2 : 1;
+  const tiredF = errorFatigue(f);
   const volleyBadge = inp.volley && inp.badges.includes('netMagnet') ? 0.8 : 1;
   const power = inp.power ?? 1;
   const backF = 1 + (inp.backpedal ?? 0) * T.backpedalErr;
@@ -228,7 +229,7 @@ export function makeShot(inp: ShotInput, sf: Surface): ShotOutput {
   if (inp.overhead) pace *= 1.4;
   if (inp.volley && !inp.overhead) pace *= 0.85;
   pace *= { PERFECT: 1.17, GOOD: 1, EARLY: 0.93, LATE: 0.93, MISHIT: 0.5 }[inp.grade];
-  pace *= 0.86 + 0.14 * Math.min(1, f * 1.6);
+  pace *= paceFatigue(f);
   pace *= inp.speedRatio > 0.5 ? 0.94 : 1;
   pace *= 1 - inp.stretch * 0.25;
   pace *= 1 - (inp.backpedal ?? 0) * 0.25;
@@ -321,7 +322,7 @@ export function makeServe(inp: ServeInput, sf: Surface): { ball: BallState; spee
   const f = inp.stamina / 100;
   let speed = { flat: T.flatServeSpeed, kick: T.kickServeSpeed, slice: T.sliceServeSpeed }[inp.type] * (0.68 + 0.38 * statF);
   if (inp.badges.includes('aceMachine')) speed *= 1.04;
-  speed *= 0.84 + 0.16 * Math.min(1, f * 1.8);
+  speed *= serveFatigue(f);
   const qf = { PERFECT: 1.05, GOOD: 0.97, EARLY: 0.86, LATE: 0.86 }[inp.quality];
   speed *= qf;
   const spin = inp.type === 'kick' ? 1.15 : inp.type === 'slice' ? -0.2 : 0.15;
@@ -331,7 +332,7 @@ export function makeServe(inp: ServeInput, sf: Surface): { ball: BallState; spee
   const out = solveShot(inp.from, tx, ty, dist / (speed * 0.9), spin, side, sf, margin);
   // errors
   const qErr = { PERFECT: 0.45, GOOD: 1, EARLY: 1.9, LATE: 1.9 }[inp.quality] * (1 + Math.max(0, Math.abs(inp.tossOffset) - 9) * 0.06);
-  const tired = f < 0.4 ? 1 + (0.4 - f) * 1.8 : 1;
+  const tired = serveErrorFatigue(f);
   const typeErr = inp.type === 'flat' ? 1.5 : inp.type === 'kick' ? 1.0 : 1.2;
   const err = qErr * tired * typeErr * (1.5 - statF * 0.9);
   const ang = inp.rng.gauss() * 0.017 * err;

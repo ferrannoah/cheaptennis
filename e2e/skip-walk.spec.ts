@@ -22,6 +22,10 @@ test('Space skips the dead time and walk between points without tossing', async 
     if (s.phase === 'over') break;
     expect(JSON.stringify([s.points, s.games])).not.toBe(pts); // the point was scored
     expect(s.walking).toBe(false);
+    // the point-won UI is cleared too
+    expect(s.call).toBeNull();
+    expect(s.popups).toEqual([]);
+    expect(s.banner).toBeNull();
     // the same press must not have started a toss
     expect(s.players[s.server].serve).toBe('ready');
     s = await adv(page, 6);

@@ -3,7 +3,7 @@ import { Surface } from '../data/surfaces';
 import { HALF_LEN, HALF_W, HALF_W_DBL, SERVICE_Y, POST_X, netHeightAt } from '../data/court';
 import { Rng } from '../core/rng';
 import { text } from './text';
-import { Venue, VenueTheme, venueFor, venueLook, SPONSORS } from '../data/venues';
+import { Venue, VenueTheme, venueFor, venueLook } from '../data/venues';
 
 type V3 = [number, number, number];
 
@@ -53,7 +53,7 @@ const SHIRTS = ['#e84a4a', '#f2f2f2', '#3a7bd5', '#f5c542', '#2fa86b', '#e87e3a'
 const SKINS = ['#f3cfb0', '#e6b08a', '#c98e62', '#9b6640', '#6e4528', '#f7dcc4'];
 const HAIRS = ['#2b1d12', '#5a3a1f', '#c99b52', '#111', '#8a4b2a', '#d8d0c0'];
 
-export function makeCrowd(seed = 7, rows = 7, empty = 0.08): Seat[] {
+export function makeCrowd(seed = 7, rows = 7, empty = 0.08, farRows = rows, sideRange: [number, number] = [-24, 25], farHalfW = 16): Seat[] {
   const r = new Rng(seed);
   const seats: Seat[] = [];
   const push = (x: number, y: number, z: number) => {
@@ -68,14 +68,14 @@ export function makeCrowd(seed = 7, rows = 7, empty = 0.08): Seat[] {
     for (let row = 0; row < rows; row++) {
       const x = side * (10.6 + row * 1.0);
       const z = 1.4 + row * 0.95;
-      for (let y = -24; y <= 25; y += 0.95) push(x, y, z);
+      for (let y = sideRange[0] + 0.4; y <= sideRange[1] - 0.4; y += 0.95) push(x, y, z);
     }
   }
   // far stand
-  for (let row = 0; row < rows; row++) {
+  for (let row = 0; row < farRows; row++) {
     const y = 20.4 + row * 1.0;
     const z = 1.4 + row * 0.95;
-    for (let x = -16; x <= 16; x += 0.95) push(x, y, z);
+    for (let x = -farHalfW; x <= farHalfW; x += 0.95) push(x, y, z);
   }
   // sort far-to-near for painter's order (by depth: larger y & larger |x| first roughly)
   seats.sort((a, b) => b.y - a.y || Math.abs(b.x) - Math.abs(a.x));
@@ -99,29 +99,35 @@ export function drawCourtBackground(ctx: CanvasRenderingContext2D, cam: Camera, 
     for (let i = 0; i < 40; i++) ctx.fillRect(r0.range(0, W), r0.range(0, H * 0.18), 1, 1);
   }
 
-  // far stand structure
-  const roofZ = 1.0 + rows * 0.95 + 0.6;
-  const backY = 20 + rows * 1.0;
-  for (let row = rows; row >= 0; row--) {
+  // stand colours: park courts have plain aluminium bleachers
+  const standA = look.park ? '#c4ccd4' : th.stand[0];
+  const standB = look.park ? '#b3bcc6' : th.stand[1];
+  const riser = look.park ? '#8a949e' : th.riser;
+  if (look.park) drawPark(ctx, cam);
+
+  // far stand structure (a stadium has the full-width stand, wall and roof; a park court small bleachers or none)
+  const farRows = look.farRows;
+  const farX = look.park ? 8 : 30;
+  const roofZ = 1.0 + farRows * 0.95 + 0.6;
+  const backY = 20 + farRows * 1.0;
+  for (let row = farRows; row >= 0 && farRows > 0; row--) {
     const y = 20 + row * 1.0;
     const z = 1.0 + row * 0.95;
-    poly(ctx, cam, [[-30, y, z], [30, y, z], [30, y + 1.0, z], [-30, y + 1.0, z]]);
-    ctx.fillStyle = row % 2 ? th.stand[0] : th.stand[1];
+    poly(ctx, cam, [[-farX, y, z], [farX, y, z], [farX, y + 1.0, z], [-farX, y + 1.0, z]]);
+    ctx.fillStyle = row % 2 ? standA : standB;
     ctx.fill();
-    poly(ctx, cam, [[-30, y, z - 0.95], [30, y, z - 0.95], [30, y, z], [-30, y, z]]);
-    ctx.fillStyle = th.riser;
+    poly(ctx, cam, [[-farX, y, z - 0.95], [farX, y, z - 0.95], [farX, y, z], [-farX, y, z]]);
+    ctx.fillStyle = riser;
     ctx.fill();
   }
-  // far roof / back wall + coloured roof band
-  poly(ctx, cam, [[-30, backY, roofZ - 1], [30, backY, roofZ - 1], [30, backY, roofZ + 5.4], [-30, backY, roofZ + 5.4]]);
-  ctx.fillStyle = th.wall;
-  ctx.fill();
-  poly(ctx, cam, [[-30, backY, roofZ + 4.4], [30, backY, roofZ + 4.4], [30, backY, roofZ + 5.9], [-30, backY, roofZ + 5.9]]);
-  ctx.fillStyle = th.roofBand;
-  ctx.fill();
-  if (look.wallName && venue.name) {
-    const wn = cam.project(0, backY, roofZ + 2.2);
-    text(ctx, venue.name.toUpperCase(), wn.x, wn.y, { size: Math.max(9, wn.s * 1.1), color: th.boardText, align: 'center', weight: 800, outline: 'rgba(0,0,0,0.35)' });
+  if (!look.park) {
+    // far roof / back wall + coloured roof band
+    poly(ctx, cam, [[-30, backY, roofZ - 1], [30, backY, roofZ - 1], [30, backY, roofZ + 5.4], [-30, backY, roofZ + 5.4]]);
+    ctx.fillStyle = th.wall;
+    ctx.fill();
+    poly(ctx, cam, [[-30, backY, roofZ + 4.4], [30, backY, roofZ + 4.4], [30, backY, roofZ + 5.9], [-30, backY, roofZ + 5.9]]);
+    ctx.fillStyle = th.roofBand;
+    ctx.fill();
   }
   if (th.night) {
     // floodlight towers glowing at the corners
@@ -136,17 +142,26 @@ export function drawCourtBackground(ctx: CanvasRenderingContext2D, cam: Camera, 
     }
   }
 
-  // side stands
+  // side stands (full length in a stadium, a short run of bleachers at a park court)
+  const [sy0, sy1] = look.park ? look.sideRange : [-40, 28];
   for (const side of [-1, 1]) {
     for (let row = rows; row >= 0; row--) {
       const x = side * (10.2 + row * 1.0);
       const z = 1.0 + row * 0.95;
-      poly(ctx, cam, [[x, -40, z], [x + side * 1.0, -40, z], [x + side * 1.0, 28, z], [x, 28, z]]);
-      ctx.fillStyle = row % 2 ? th.stand[0] : th.stand[1];
+      poly(ctx, cam, [[x, sy0, z], [x + side * 1.0, sy0, z], [x + side * 1.0, sy1, z], [x, sy1, z]]);
+      ctx.fillStyle = row % 2 ? standA : standB;
       ctx.fill();
-      poly(ctx, cam, [[x, -40, z - 0.95], [x, 28, z - 0.95], [x, 28, z], [x, -40, z]]);
-      ctx.fillStyle = th.riser;
+      poly(ctx, cam, [[x, sy0, z - 0.95], [x, sy1, z - 0.95], [x, sy1, z], [x, sy0, z]]);
+      ctx.fillStyle = riser;
       ctx.fill();
+      if (look.park) {
+        // bleacher end frame
+        for (const yy of [sy0, sy1]) {
+          poly(ctx, cam, [[x, yy, 0], [x + side * 1.0, yy, 0], [x + side * 1.0, yy, z], [x, yy, z]]);
+          ctx.fillStyle = '#6f7983';
+          ctx.fill();
+        }
+      }
     }
   }
   // Major banners hanging from the front of the side stands
@@ -204,7 +219,7 @@ export function drawCourtBackground(ctx: CanvasRenderingContext2D, cam: Camera, 
     lineSeg(ctx, cam, -HALF_W_DBL, HALF_LEN, HALF_W_DBL, HALF_LEN, 0.6);
   }
 
-  drawSponsorBoards(ctx, cam, th);
+  drawBoards(ctx, cam, th, look.park);
   // Majors paint their name on the court behind each baseline
   if (look.wallName && venue.name) {
     for (const y of [HALF_LEN + 3.6, -HALF_LEN - 3.2]) {
@@ -241,76 +256,62 @@ export function drawCourtBackground(ctx: CanvasRenderingContext2D, cam: Camera, 
   ctx.fill();
 }
 
-/** Back wall layout (x ranges on the far wall at y = BOARD_Y) */
+/** Park setting for small events: grass all around, a line of trees in the distance. */
+function drawPark(ctx: CanvasRenderingContext2D, cam: Camera): void {
+  groundQuad(ctx, cam, -60, -60, 60, 80, '#6aa653');
+  for (let i = 0; i < 8; i++) groundQuad(ctx, cam, -60, 20 + i * 6, 60, 23 + i * 6, 'rgba(255,255,255,0.04)');
+  const r = new Rng(77);
+  // far tree line, then side tree lines (far to near for overlap)
+  const trees: [number, number, number][] = [];
+  for (let x = -44; x <= 44; x += 2.6) trees.push([x + r.range(-0.8, 0.8), 36 + r.range(-2, 2), r.range(4, 7)]);
+  for (const side of [-1, 1]) for (let y = 30; y >= -30; y -= 3.2) trees.push([side * (26 + r.range(-1.5, 1.5)), y + r.range(-1, 1), r.range(4, 7)]);
+  trees.sort((a, b) => b[1] - a[1]);
+  for (const [x, y, h] of trees) {
+    const base = cam.project(x, y, 0);
+    const top = cam.project(x, y, h);
+    const rad = Math.max(3, base.s * h * 0.32);
+    ctx.fillStyle = '#5a3d27';
+    ctx.fillRect(base.x - base.s * 0.15, top.y, base.s * 0.3, base.y - top.y);
+    for (const [dx, dy, k, col] of [[0, 0, 1, '#2f6b33'], [-0.35, 0.25, 0.75, '#3a7d3c'], [0.3, 0.3, 0.7, '#295e2d']] as const) {
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(top.x + dx * rad, top.y + dy * rad, rad * k, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+/** the far courtside wall */
 export const BOARD_Y = 19.6;
-export const CLOCK_X = 0;
-export const SPEED_X = -3.5;
 
 /**
- * Courtside sponsor boards in the classic pro-event look: dark boards with metallic lettering,
- * a big analogue clock board in the middle of the back wall and a serve-speed display.
- * Clock hands and speed digits are drawn live by the match view.
+ * Courtside walls: plain themed windscreens (no advertising), a thin accent rule along the top,
+ * ivy on grass. Small (park) courts get a lower, darker windscreen fence.
  */
-function drawSponsorBoards(ctx: CanvasRenderingContext2D, cam: Camera, th: VenueTheme): void {
-  const boardH = 1.1;
-  const panel = (x0: number, x1: number, y: number, label: string, size = 0.5) => {
-    poly(ctx, cam, [[x0, y, 0], [x1, y, 0], [x1, y, boardH], [x0, y, boardH]]);
-    const a = cam.project(x0, y, boardH), b = cam.project(x0, y, 0);
-    const g = ctx.createLinearGradient(0, a.y, 0, b.y);
-    g.addColorStop(0, shadeHex(th.board, 0.12));
-    g.addColorStop(1, shadeHex(th.board, -0.2));
-    ctx.fillStyle = g;
-    ctx.fill();
-    // thin accent rule along the top
-    poly(ctx, cam, [[x0, y, boardH - 0.08], [x1, y, boardH - 0.08], [x1, y, boardH], [x0, y, boardH]]);
-    ctx.fillStyle = th.boardAccent;
-    ctx.fill();
-    if (label) {
-      const c = cam.project((x0 + x1) / 2, y, boardH * 0.45);
-      text(ctx, label, c.x, c.y, { size: Math.max(6, c.s * size), color: th.boardText, align: 'center', weight: 800, maxWidth: Math.abs(cam.project(x1, y, 0).x - cam.project(x0, y, 0).x) - 6 });
-    }
-  };
-  // back wall: sponsor | serve speed | CLOCK | sponsor | sponsor
-  panel(-10, -5.6, BOARD_Y, SPONSORS[1]);
-  panel(-5.6, -1.4, BOARD_Y, '');
-  panel(-1.4, 1.4, BOARD_Y, '');
-  panel(1.4, 5.6, BOARD_Y, SPONSORS[2], 0.42);
-  panel(5.6, 10, BOARD_Y, SPONSORS[3]);
-  // serve speed display frame
-  const sl = cam.project(SPEED_X, BOARD_Y, 0.82);
-  text(ctx, 'SERVE SPEED', sl.x, sl.y, { size: Math.max(5, sl.s * 0.22), color: th.boardText, align: 'center', weight: 800 });
-  // clock board: the timekeeper's name over a round face
-  const cc = cam.project(CLOCK_X, BOARD_Y, 0.5);
-  const r = 0.4 * cc.s;
-  ctx.fillStyle = '#f4f1e6';
-  ctx.strokeStyle = th.boardText;
-  ctx.lineWidth = Math.max(1, cc.s * 0.05);
-  ctx.beginPath();
-  ctx.arc(cc.x, cc.y, r, 0, Math.PI * 2);
+function drawBoards(ctx: CanvasRenderingContext2D, cam: Camera, th: VenueTheme, park: boolean): void {
+  const boardH = park ? 0.9 : 1.1;
+  const col = park ? '#1f3d2c' : th.board;
+  const accent = park ? '#2c5a40' : th.boardAccent;
+  // back wall
+  poly(ctx, cam, [[-10, BOARD_Y, 0], [10, BOARD_Y, 0], [10, BOARD_Y, boardH], [-10, BOARD_Y, boardH]]);
+  const a = cam.project(0, BOARD_Y, boardH), b = cam.project(0, BOARD_Y, 0);
+  const g = ctx.createLinearGradient(0, a.y, 0, b.y);
+  g.addColorStop(0, shadeHex(col, 0.1));
+  g.addColorStop(1, shadeHex(col, -0.2));
+  ctx.fillStyle = g;
   ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#2a2a2a';
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    ctx.fillRect(cc.x + Math.sin(a) * r * 0.8 - 0.5, cc.y - Math.cos(a) * r * 0.8 - 0.5, 1, 1);
-  }
-  const ct = cam.project(CLOCK_X, BOARD_Y, 1.02);
-  text(ctx, SPONSORS[0], ct.x, ct.y, { size: Math.max(5, ct.s * 0.18), color: th.boardText, align: 'center', weight: 800 });
-  // side boards with repeated sponsors
+  poly(ctx, cam, [[-10, BOARD_Y, boardH - 0.08], [10, BOARD_Y, boardH - 0.08], [10, BOARD_Y, boardH], [-10, BOARD_Y, boardH]]);
+  ctx.fillStyle = accent;
+  ctx.fill();
+  // side walls
   for (const side of [-1, 1]) {
-    poly(ctx, cam, [[side * 9.9, -40, 0], [side * 9.9, BOARD_Y, 0], [side * 9.9, BOARD_Y, 1.0], [side * 9.9, -40, 1.0]]);
-    ctx.fillStyle = th.board;
+    poly(ctx, cam, [[side * 9.9, -40, 0], [side * 9.9, BOARD_Y, 0], [side * 9.9, BOARD_Y, boardH - 0.1], [side * 9.9, -40, boardH - 0.1]]);
+    ctx.fillStyle = col;
     ctx.fill();
-    poly(ctx, cam, [[side * 9.9, -40, 0.92], [side * 9.9, BOARD_Y, 0.92], [side * 9.9, BOARD_Y, 1.0], [side * 9.9, -40, 1.0]]);
-    ctx.fillStyle = th.boardAccent;
+    poly(ctx, cam, [[side * 9.9, -40, boardH - 0.18], [side * 9.9, BOARD_Y, boardH - 0.18], [side * 9.9, BOARD_Y, boardH - 0.1], [side * 9.9, -40, boardH - 0.1]]);
+    ctx.fillStyle = accent;
     ctx.fill();
-    for (let i = 0; i < 5; i++) {
-      const y = 16 - i * 7;
-      const c = cam.project(side * 9.9, y, 0.45);
-      if (c.y > 470 || c.y < 0) continue;
-      text(ctx, SPONSORS[(i + (side > 0 ? 4 : 1)) % SPONSORS.length], c.x, c.y, { size: Math.max(5, c.s * 0.24), color: th.boardText, align: 'center', weight: 800 });
-    }
-    if (th.ivy) {
+    if (th.ivy && !park) {
       // ivy along the top of the side walls
       const r0 = new Rng(side > 0 ? 41 : 43);
       for (let i = 0; i < 260; i++) {

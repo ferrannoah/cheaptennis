@@ -3,10 +3,9 @@ import { Match, MatchConfig } from '../match/match';
 import { MatchView, GRADE_COLOR } from '../gfx/match-view';
 import { audio } from '../core/audio';
 import { input } from '../core/input';
-import { settings } from '../core/settings';
+import { settings, saveSettings } from '../core/settings';
 import { PauseScene } from './pause';
 import { Player } from '../match/player';
-import { TACTICS } from '../data/tactics';
 import { text } from '../gfx/text';
 
 export interface MatchResult {
@@ -67,11 +66,24 @@ export class MatchScene implements Scene {
       return;
     }
     if (input.keyPressed('KeyM')) audio.toggleMute();
+    // H: show/hide the fatigue details (unless H is a shot key for someone in this match, e.g. keyboard versus)
+    if (input.keyPressed('KeyH') && !this.m.players.some((p) => p.ctrl?.profile && Object.values(settings.keys[p.ctrl.profile]).some((ks) => ks.includes('KeyH')))) {
+      settings.fatigueInfo = !settings.fatigueInfo;
+      saveSettings();
+      audio.sfx('menu_move');
+    }
     const m = this.m;
     const hs = m.hitstop;
+    const skips = m.skips;
     m.update();
     if (hs === 0) this.view.update(DT);
     this.handleEvents();
+    if (m.skips !== skips) {
+      // a skip between points also clears the point's popups, umpire call and banners
+      this.view.call = null;
+      this.view.popups = [];
+      this.view.banner = null;
+    }
     this.opts.onUpdate?.(m);
     if (m.phase === 'over') {
       this.overT++;
@@ -210,11 +222,9 @@ export class MatchScene implements Scene {
         case 'plan':
           v.planTag[e.p] = { tactic: e.tactic, t: 0 };
           break;
-        case 'adapt': {
-          const p = m.players[e.p];
-          v.popup(p, 'CHANGES TACTICS', `now favouring ${TACTICS[e.tactic].name}`, TACTICS[e.tactic].color, true);
+        case 'adapt':
+          // the COM's tactics are hidden during play
           break;
-        }
       }
     }
     m.events.length = 0;
@@ -251,6 +261,6 @@ export class MatchScene implements Scene {
   }
 
   debugState(): Record<string, unknown> {
-    return { ...this.m.debug(), popups: this.view.popups.map((p) => p.text + '|' + p.sub), call: this.view.call?.text ?? null, particles: this.view.particles.list.length };
+    return { ...this.m.debug(), popups: this.view.popups.map((p) => p.text + '|' + p.sub), call: this.view.call?.text ?? null, banner: this.view.banner?.text ?? null, particles: this.view.particles.list.length };
   }
 }

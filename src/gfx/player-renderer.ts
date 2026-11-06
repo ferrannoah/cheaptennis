@@ -13,6 +13,12 @@ export interface Pose {
   fL: [number, number]; fR: [number, number];
   racket: number; // angle of racket from right hand (0 = up, +clockwise)
   lean: number;
+  /**
+   * depth of the racket arm / off arm relative to the body: < 0 in front of the chest, > 0 behind
+   * the back. Decides whether they are drawn behind or over the torso and head.
+   */
+  rDepth: number;
+  oDepth: number;
 }
 
 type P2 = [number, number];
@@ -28,6 +34,7 @@ function base(): Pose {
     kL: P(-0.15, 0.5), kR: P(0.15, 0.5),
     fL: P(-0.2, 0.02), fR: P(0.2, 0.02),
     racket: -0.35, lean: 0,
+    rDepth: -1, oDepth: -1,
   };
 }
 
@@ -69,6 +76,26 @@ export const POSES = {
   celebrate: pose({ eR: P(0.35, 1.7), hR: P(0.3, 2.0), racket: 0.2, eL: P(-0.35, 1.2), hL: P(-0.25, 1.35) }),
   slump: pose({ head: P(0, 1.42), neck: P(0, 1.3), sL: P(-0.2, 1.25), sR: P(0.2, 1.25), hip: P(0, 0.82), kL: P(-0.18, 0.42), kR: P(0.18, 0.42), eL: P(-0.22, 0.95), hL: P(-0.17, 0.62), eR: P(0.24, 0.95), hR: P(0.2, 0.62), racket: 2.8, lean: 0.15 }),
 } satisfies Record<string, Pose>;
+
+/**
+ * Where the racket arm and the off arm are relative to the body in each key pose
+ * ([racket, off]; < 0 in front of the chest, > 0 behind the back). Interpolated with the pose.
+ */
+const DEPTHS: Record<keyof typeof POSES, [number, number]> = {
+  ready: [-1, -1], runA: [-0.3, -0.3], runB: [-0.3, -0.3],
+  fhBack: [0.6, -1], fhContact: [-0.6, -0.8], fhFollow: [1, -0.5],
+  bhBack: [0.6, 0.6], bhContact: [-0.6, -0.6], bhFollow: [1, 1],
+  bh1Back: [0.6, 0.6], bh1Contact: [-0.6, 0.5], bh1Follow: [-0.5, 0.8],
+  fhSliceBack: [0.4, -1], fhSliceContact: [-0.6, -0.8], fhSliceFollow: [-1, -0.5],
+  bhSliceBack: [0.4, 0.4], bhSliceContact: [-0.6, 0.5], bhSliceFollow: [-1, 0.8],
+  lobFollow: [-0.3, -0.5],
+  srvToss: [0.6, -0.5], srvTrophy: [1, -0.5], srvContact: [-0.2, -1], srvFollow: [-1, -1],
+  volley: [-1, -1], dive: [-0.5, -0.5], celebrate: [-0.2, -0.5], slump: [-0.5, -0.5],
+};
+for (const k of Object.keys(DEPTHS) as (keyof typeof POSES)[]) {
+  POSES[k].rDepth = DEPTHS[k][0];
+  POSES[k].oDepth = DEPTHS[k][1];
+}
 
 export function lerpPose(a: Pose, b: Pose, t: number): Pose {
   const o = {} as Pose;
@@ -198,7 +225,25 @@ export function drawFigure(ctx: CanvasRenderingContext2D, sx: number, sy: number
     limb(p.sL, p.eL, p.hL, 0.1, skin);
     ball(p.hL, 0.058, skin);
   };
-  if (!o.facingCamera) drawOffArm();
+  const grip = () => {
+    if (o.twoHanded && Math.hypot(p.hL[0] - p.hR[0], p.hL[1] - p.hR[1]) < 0.16) {
+      // second hand on the grip, drawn over the racket hand
+      ball([p.hR[0] + (p.hL[0] - p.hR[0]) * 0.5, p.hR[1] + (p.hL[1] - p.hR[1]) * 0.5 - 0.04], 0.058, skin);
+    }
+  };
+  // Draw order: an arm (and racket) on the camera's side of the body goes over the torso and head,
+  // one on the far side goes behind them. The near (back-view) player sees the back; the far player the chest.
+  const nearCam = (depth: number) => (o.facingCamera ? depth <= 0 : depth > 0);
+  const rNear = nearCam(p.rDepth);
+  const oNear = nearCam(p.oDepth);
+  const arms = (near: boolean) => {
+    if (oNear === near) drawOffArm();
+    if (rNear === near) {
+      drawRacketArm();
+      grip();
+    }
+  };
+  arms(false);
 
   // ---- torso: a rounded, shaded shirt
   const sl: P2 = [p.sL[0] - 0.05, p.sL[1] + 0.03];
@@ -232,13 +277,6 @@ export function drawFigure(ctx: CanvasRenderingContext2D, sx: number, sy: number
   ctx.moveTo(X([wl[0] + 0.02, wl[1] + 0.05]), Y([0, wl[1] + 0.05]));
   ctx.lineTo(X([wr[0] - 0.02, wr[1] + 0.05]), Y([0, wr[1] + 0.05]));
   ctx.stroke();
-
-  if (o.facingCamera) drawOffArm();
-  drawRacketArm();
-  if (o.twoHanded && Math.hypot(p.hL[0] - p.hR[0], p.hL[1] - p.hR[1]) < 0.16) {
-    // second hand on the grip, drawn over the racket hand
-    ball([p.hR[0] + (p.hL[0] - p.hR[0]) * 0.5, p.hR[1] + (p.hL[1] - p.hR[1]) * 0.5 - 0.04], 0.058, skin);
-  }
 
   // ---- neck + big head
   limb(p.neck, [p.neck[0], p.neck[1] + 0.08], [p.neck[0], p.neck[1] + 0.1], 0.1, skin);
@@ -293,6 +331,7 @@ export function drawFigure(ctx: CanvasRenderingContext2D, sx: number, sy: number
     ctx.arc(hx, hy + hr * 0.42, hr * 0.18, Math.PI * 0.15, Math.PI * 0.85);
     ctx.stroke();
   }
+  arms(true);
 }
 
 /** Oversized racket with a visible string bed; `kit` tints the frame. */

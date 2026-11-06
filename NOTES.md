@@ -51,6 +51,14 @@ unclear, and writes one prompt that it can then use to edit the game.
 ## Done
 <!-- Claude moves notes here after acting on them, with the date. -->
 
+### 2026-11-06: playtest round 2 (M19)
+- The advertisements can go → **removed**. The walls are plain themed windscreens (no sponsor names, clock or speed board); serve speed still pops up on court.
+- See which stats get worse with stamina, show/hide with H → **done**. H toggles a panel listing top speed, acceleration, timing window, shot accuracy, shot power, serve speed and serve accuracy in %, from the game's own fatigue rules.
+- Don't show the opponent's plan during the match, and never the % mix → **done**. Nothing in play; pregame only says e.g. "Mostly Net Attack, also Serve + 1".
+- Z-index bugs with the player and racket → **fixed**. The racket and arms go behind or in front of the body depending on the stroke and which way the player faces.
+- Tiny career tournaments should have almost no crowd → **done**. Futures are park courts with small bleachers, and the crowd grows through Challenger, 250, 500 and 1000 up to full Major stadiums.
+- Skipping between points should also skip the point-won UI → **done**.
+
 ### 2026-11-06: playtest round 1 (prompt: docs/NEXT_PROMPT.md)
 - Tutorial: let shots finish instead of skipping to the next one → **done**. Each shot plays out with an IN/OUT landing marker, then a 1 s pause (Space skips it), and a finished step waits for the ball.
 - Space to skip players walking to their spots between points → **done**. It also skips changeovers, and a "SPACE skip" hint shows.

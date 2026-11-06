@@ -6,7 +6,7 @@ import { drawCourtBackground, drawNet, drawCrowd, makeCrowd, Seat } from './cour
 import { drawFigure, drawShadow, lerpPose, POSES, Pose, smooth } from './player-renderer';
 import { Particles } from './particles';
 import { text, font } from './text';
-import { TACTICS, TacticId } from '../data/tactics';
+import { TacticId } from '../data/tactics';
 import { roundRect } from './ui';
 import { W, H, game } from '../core/game';
 import { T } from '../data/tuning';
@@ -15,7 +15,7 @@ import { SURFACES, SurfaceId } from '../data/surfaces';
 import { Grade } from '../match/shots';
 import { ShotType } from '../data/types';
 import { Venue, VenueLook, venueFor, venueKey, venueLook } from '../data/venues';
-import { BOARD_Y, CLOCK_X, SPEED_X } from './court';
+import { fatigueEffects } from '../match/fatigue';
 
 /** courtside photographers behind the far baseline (Majors / late rounds) */
 const PHOTOGRAPHERS: [number, number][] = [[-7.6, 18.7], [-5.6, 18.9], [5.4, 18.9], [7.4, 18.7]];
@@ -60,7 +60,8 @@ export class MatchView {
     this.netLayer = new Layer((ctx) => drawNet(ctx, this.cam));
     this.venue = m.cfg.venue ?? venueFor(m.sf.id, { tier: m.practice ? 'practice' : 'tour' });
     this.look = venueLook(this.venue);
-    this.seats = makeCrowd(7, this.look.standRows, this.look.empty);
+    const lk = this.look;
+    this.seats = makeCrowd(7, lk.standRows, lk.empty, lk.farRows, lk.sideRange, lk.park ? 7.5 : 16);
   }
 
   /** a burst of camera flashes around the stadium (e.g. after match point in a final) */
@@ -83,28 +84,6 @@ export class MatchView {
       this.flashes.push({ x: ph[0], y: ph[1], z: 0.75, t: 0 });
     }
     if (this.flashes.length > 120) this.flashes.splice(0, this.flashes.length - 120);
-  }
-
-  /** live parts of the back wall: clock hands and the serve-speed readout */
-  private drawWallLive(ctx: CanvasRenderingContext2D): void {
-    const th = this.venue.theme;
-    const cc = this.cam.project(CLOCK_X, BOARD_Y - 0.02, 0.5);
-    const r = 0.4 * cc.s;
-    const d = new Date();
-    const hA = ((d.getHours() % 12) + d.getMinutes() / 60) / 12 * Math.PI * 2;
-    const mA = (d.getMinutes() / 60) * Math.PI * 2;
-    ctx.strokeStyle = '#1b1b1b';
-    ctx.lineCap = 'round';
-    for (const [a, len, w] of [[hA, 0.5, 0.09], [mA, 0.75, 0.06]] as const) {
-      ctx.lineWidth = Math.max(1, cc.s * w);
-      ctx.beginPath();
-      ctx.moveTo(cc.x, cc.y);
-      ctx.lineTo(cc.x + Math.sin(a) * r * len, cc.y - Math.cos(a) * r * len);
-      ctx.stroke();
-    }
-    const sp = this.cam.project(SPEED_X, BOARD_Y - 0.02, 0.42);
-    const kmh = this.lastServeKmh ? `${Math.round(this.lastServeKmh)} KM/H` : '--- KM/H';
-    text(ctx, kmh, sp.x, sp.y, { size: Math.max(6, sp.s * 0.42), color: this.lastServeKmh ? th.boardText : 'rgba(255,255,255,0.35)', align: 'center', weight: 800 });
   }
 
   private drawPhotographers(ctx: CanvasRenderingContext2D): void {
@@ -244,7 +223,6 @@ export class MatchView {
     ctx.translate(sx, sy);
     courtLayer(m.sf.id, this.cam, 'match', this.venue).draw(ctx);
     if (this.wear) ctx.drawImage(this.wear, 0, 0, W, H);
-    this.drawWallLive(ctx);
     const ballX = m.ballVisible ? m.ball.x : 0;
     drawCrowd(ctx, this.cam, this.seats, this.time, m.crowdExcite, ballX);
     this.drawPhotographers(ctx);
@@ -431,11 +409,10 @@ export class MatchView {
     const [p0, p1] = m.players;
     if (!m.practice) {
       const sbH = this.drawScoreboard(ctx, 8, 8);
-      // stamina bars + COM game plans: far player under the scoreboard, near player bottom-left
+      // stamina bars: far player under the scoreboard, near player bottom-left.
+      // (the COM's game plan is not shown during play: you have to read it from how they play)
       this.staminaBar(ctx, p1, 10, 8 + sbH + 8, p1.setup.short);
-      this.planChip(ctx, 1, 10, 8 + sbH + 28);
       this.staminaBar(ctx, p0, 10, H - 22, p0.setup.short);
-      this.planChip(ctx, 0, 10, H - 36);
     } else {
       const bx = 10, by = H - 34;
       ctx.fillStyle = 'rgba(10,18,34,0.62)';
@@ -590,27 +567,6 @@ export class MatchView {
     return h;
   }
 
-  private planChip(ctx: CanvasRenderingContext2D, i: 0 | 1, x: number, y: number): void {
-    const pt = this.planTag[i];
-    if (!pt || !this.m.ais[i]) return;
-    const tac = TACTICS[pt.tactic];
-    const pop = pt.t < 0.25 ? 1 + (0.25 - pt.t) * 1.2 : 1;
-    const label = `PLAN: ${tac.name.toUpperCase()}`;
-    ctx.save();
-    ctx.font = font(9);
-    const w = ctx.measureText(label).width + 16;
-    ctx.translate(x, y);
-    ctx.scale(pop, pop);
-    ctx.fillStyle = 'rgba(10,18,34,0.7)';
-    roundRect(ctx, -4, -7, w, 14, 7);
-    ctx.fill();
-    ctx.fillStyle = tac.color;
-    ctx.beginPath();
-    ctx.arc(3, 0, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    text(ctx, label, x + 10 * pop, y + 0.5, { size: 9 * pop, color: tac.color });
-  }
 
   private staminaBar(ctx: CanvasRenderingContext2D, p: Player, x: number, y: number, label: string): void {
     const f = p.staminaF();
@@ -631,6 +587,33 @@ export class MatchView {
     roundRect(ctx, bx, y + 1, Math.max(4, w * f), 8, 4);
     ctx.fill();
     if (low) text(ctx, 'TIRED', bx + w + 4, y + 5, { size: 8, color: '#ff8a7a', weight: 800 });
+    if (p.human) this.fatigueInfo(ctx, p, x - 4, y, y > H / 2);
+  }
+
+  /** "H" hint chip next to a human's stamina bar, and (when toggled on) what tiredness costs right now */
+  private fatigueInfo(ctx: CanvasRenderingContext2D, p: Player, x: number, barY: number, above: boolean): void {
+    const open = settings.fatigueInfo;
+    const hx = x + 174; // after the bar and its "TIRED" tag
+    ctx.fillStyle = open ? 'rgba(255,212,121,0.9)' : 'rgba(10,18,34,0.6)';
+    roundRect(ctx, hx, barY - 2, open ? 16 : 54, 14, 7);
+    ctx.fill();
+    text(ctx, open ? 'H' : 'H  fatigue', hx + (open ? 8 : 27), barY + 5, { size: 8, align: 'center', color: open ? '#13284a' : '#d6e4f7', weight: 800 });
+    if (!open) return;
+    const effects = fatigueEffects(p.staminaF());
+    const rowH = 12;
+    const w = 168;
+    const h = 20 + effects.length * rowH;
+    const y = above ? barY - 6 - h : barY + 18;
+    ctx.fillStyle = 'rgba(10,18,34,0.78)';
+    roundRect(ctx, x, y, w, h, 8);
+    ctx.fill();
+    text(ctx, `FATIGUE  •  stamina ${Math.round(p.stamina)}%`, x + 8, y + 10, { size: 9, color: '#ffd479', weight: 800 });
+    effects.forEach((e, i) => {
+      const yy = y + 22 + i * rowH;
+      const pct = Math.round(e.delta * 100);
+      text(ctx, e.label, x + 8, yy, { size: 9, color: '#d6e4f7', weight: 700 });
+      text(ctx, pct === 0 ? 'OK' : `${pct}%`, x + w - 8, yy, { size: 9, align: 'right', color: pct === 0 ? '#7fe08f' : pct > -10 ? '#f2d23a' : '#ff8a7a', weight: 800 });
+    });
   }
 
   private drawMeter(ctx: CanvasRenderingContext2D, p: Player, training: boolean): void {
