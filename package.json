@@ -1,0 +1,20 @@
+{
+  "name": "cheaptennis",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "play": "playwright test --reporter=line",
+    "sim:career": "vitest run tests/career-sim.test.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.48.2",
+    "typescript": "5.6.3",
+    "vite": "5.4.10",
+    "vitest": "2.1.4"
+  }
+}
