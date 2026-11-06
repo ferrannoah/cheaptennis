@@ -41,9 +41,32 @@ A fixed, high, slightly tilted broadcast camera behind the near baseline. A real
 
 ### Visual style
 - **Court:** grass = mowed stripes in two alternating greens across the court; **clay** = terracotta with subtle brushed texture and darker line-adjacent dust; **hard** = blue court inside a green surround. Crisp white lines (doubles court drawn, singles played). Dark mesh net with white tape and **yellow posts**.
-- **Players:** small, smooth-shaded athletes (rounded limbs drawn as capsules with gradient shading), white kit (career kit colours customisable), visible racket with a strung head. Soft elliptical shadow underneath.
-- **Animations** (procedural, keyframed joint angles, interpolated): idle bounce, run (with lean), split step, forehand, backhand (one-handed or two-handed per player), serve (toss, trophy pose, strike), volley, overhead, dive/stretch, celebration, tired slump.
+- **Players (M18 restyle):** chunky, stylised athletes with a big head (about a quarter of the height), short legs and an oversized racket (~1.5× real scale) with a visible string bed. The frame is tinted in the player's band colour. Limbs are shaded capsules lit from the upper left, and the shirt is rounded with sleeve caps and a trim stripe. Kit colours are customisable, with a round drop shadow underneath. This is an original design inspired by the general big-racket / small-player style of casual browser tennis games; no other game's art is copied.
+- **Animations** (procedural keyframed poses, interpolated): idle bounce, run (with lean), split step, serve (toss, trophy pose, strike), volley punch, overhead, dive/stretch, celebration and tired slump. The ground strokes are clearly distinct:
+  - **Forehand:** unit turn with the off arm pointing at the ball, low-to-high swing, finish wrapped over the opposite shoulder.
+  - **Two-handed backhand:** both hands on the grip from the take-back to a high finish.
+  - **One-handed backhand:** off hand on the throat during the take-back, off arm thrown back for balance at the finish.
+  - **Slice:** a one-handed high-to-low swing on both wings.
+  - **Drop shot:** a short, soft slice.
+  - **Lob:** an open-face swing with a high finish.
+
+  Left-handers and far (front-view) players are mirrored. *(pose gallery: e2e/art.spec)*
 - **Stands & crowd:** tiered stands along both sidelines and behind the far baseline; crowd as small coloured head/shoulder blobs that bob idly, rise and wave on great points, and turn their heads to follow the ball.
+- **Venues (M18, `src/data/venues.ts`):**
+  - **Themes by surface:**
+    - grass: cream stands, dark green and purple, ivy along the walls
+    - clay: terracotta and navy, an open-air bowl
+    - hard: blue and teal, with a **night session** option in Exhibition (darkened stands, floodlit court)
+  - **Sponsor boards** in the classic pro-event look, with made-up brands only (no real trademarks):
+    - dark boards with metallic lettering on the back and side walls
+    - a big analogue **clock board** (CHRONOVA) showing the real time
+    - a live **SERVE SPEED** display
+  - **Majors and the Tour Finals** add:
+    - taller, fuller stands
+    - banners on the side stands
+    - the event name painted behind each baseline
+    - photographers at courtside
+  - **Atmosphere builds through the event** (`stage` 0 = first round … 1 = final): fewer empty seats, louder applause and more camera flashes in later rounds. From the quarterfinals on there is a walk-on card ("FINAL • CENTRE COURT"). After match point in a final, the stadium erupts in camera flashes.
 - **Effects:** ball trail on power and PERFECT shots; clay dust puff on bounces/slides; grass wear (worn brown patches accumulate around the baselines during a match); sweat particles when tired; small hitstop + screen kick on PERFECT; smooth fade/slide transitions between all screens.
 
 ### Screens (in order)
@@ -54,8 +77,16 @@ A fixed, high, slightly tilted broadcast camera behind the near baseline. A real
 5. **Results** screens (match result, bracket, trophy, career week summary).
 
 ### In-match HUD (minimal)
-- **Bottom-left:** a single score line, e.g. `YOU 15 - 30 COM` with games/sets in a smaller line beneath (`Games 2-1`), and a small serve dot by the server.
-- **Stamina:** two small bars (near player bottom-left above the score, far player top-left), green → yellow → **red** when low, pulsing when critical.
+- **Scoreboard (M18, top-left, broadcast style):** one row per player (far player on top), each with:
+  - a kit-colour chip, the name and career ranking
+  - a serve ball next to the server
+  - completed set scores (the winner's number bright)
+  - the current games in a highlighted column
+  - the point score in a gold box (0/15/30/40/AD, or tiebreak points)
+
+  The point box flashes when the score changes. On big points a tab slides out to the right: **BREAK POINT / SET POINT (GAME POINT in short formats) / MATCH POINT / TIEBREAK** (`Score.pressureLabel`).
+- **Stamina:** two small bars (far player under the scoreboard, near player bottom-left), green → yellow → **red** when low, pulsing when critical.
+- **"SPACE skip"** hint bottom-right whenever the time between points can be skipped.
 - **Timing popup:** small arc meter by the hitting player + a text popup with the grade and reason.
 - **Umpire calls:** centred pop-up text ("OUT!", "FAULT!", "LET", "DEUCE", "ADVANTAGE YOU", "GAME", "SET", "MATCH").
 - Optional **Training HUD:** predicted landing spot marker and the timing window band on the arc meter.

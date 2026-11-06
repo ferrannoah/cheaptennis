@@ -22,6 +22,7 @@ import { text } from '../gfx/text';
 import { audio } from '../core/audio';
 import { simMatch } from '../sim/match-sim';
 import { SURF_IDS } from './exhibition';
+import { venueFor, stageFromDraw } from '../data/venues';
 
 const DRAWS = [8, 16, 32];
 const T_FORMATS: FormatId[] = ['1game', '3games', 'set', 'bo3'];
@@ -133,6 +134,7 @@ export class BracketScene extends MenuScene {
       game.goto(new MatchScene({
         surface, format: FORMATS[this.tour.format].f, players: [me, opp], controllers: [new Controller('p1', 'solo', 0), null],
         difficulty: this.tour.difficulty, seed: this.tour.rng.int(0, 1e9),
+        venue: venueFor(surface, { tier: 'tour', stage: stageFromDraw(b.size, b.playersLeft()), name: this.tour.name, round: roundName(b.playersLeft()) }),
       }, {
         title: `${this.tour.name.toUpperCase()}  •  ${roundName(b.playersLeft()).toUpperCase()}`,
         onEnd: (r) => {

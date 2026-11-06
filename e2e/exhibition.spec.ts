@@ -25,7 +25,7 @@ test('full first-to-3 exhibition via menus and autopilot', async ({ page }) => {
   expect((await state(page)).scene).toBe('exhibition');
   await shot(page, 'exhibition-setup');
   // select Start Match
-  for (let i = 0; i < 5; i++) await menu(page, 'down');
+  for (let i = 0; i < 6; i++) await menu(page, 'down');
   await menu(page, 'ok');
   await adv(page, 40);
   expect((await state(page)).scene).toBe('statcard');

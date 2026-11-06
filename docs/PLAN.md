@@ -105,7 +105,11 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` verified
 - [x] 8 lessons (GDD §3.5b): intro card → drill with target zones, stand-in opponent and progress pips → summary card linked to the matching AI game plan. Reached from Practice → Tactics School; progress saved in localStorage.
 - [x] Ball machine can feed short balls (`depth`) and wide balls (`wide`) for the attack and defence drills.
 - [x] *(lessons.test: every drill rule accepts the right shot and rejects wrong ones; tactics-school.spec: the autopilot follows each lesson's coaching hint and clears all 8 drills, progress saved, screenshots of every intro/drill/summary)*
-### M18: Broadcast look: player art, forehand/backhand animations, TV scoreboard, sponsor boards, venues
+### M18: Broadcast look
+- [x] New player art: big head, short legs, an oversized racket with a string bed, shaded capsule limbs. It's an original design and applies everywhere figures are drawn (match, stat card, career create, Tactics School). *(art.spec: pose gallery for back/front view × right/left hand; 6-frame bursts through a match forehand and backhand)*
+- [x] Distinct strokes: forehand, two-handed backhand, one-handed backhand, slice (both wings), drop and lob (`strokePoses`).
+- [x] Broadcast scoreboard with set columns, a point box and a BREAK/SET/MATCH POINT tab. *(scoring.test: `pressureLabel`; scoreboard.spec screenshots)*
+- [x] Venues: surface themes, made-up sponsor boards, a live clock and serve-speed display, a hard-court night session (Exhibition → Session). Majors and Finals get taller stands, banners, a painted event name and photographers. The crowd fills up and gets louder through the rounds, there's a walk-on card from the QF on, and a camera-flash burst after match point in a final. Career, Tournament and Exhibition all pass their venue. *(venues.spec: every surface regular/Major × R1/Final + night; a full Major crowd draws in under 1 ms per frame headless)*
 
 ---
 
@@ -134,3 +138,4 @@ Evidence: `npm test` (Vitest, 45 tests) and `npx playwright test` (Playwright vi
 - 2026-11-05: M0-M12 built and verified; M13 polish, README, Pages workflow prepared; all unit + browser tests green. Per-milestone git commits skipped (Git not installed, per the user's choice).
 - 2026-11-05: M14 AI game plans added (user request). While measuring it, found and fixed an AI bug: the COM's chosen aim was being dropped at contact, so every AI shot went down the middle. Rallies went from ~10-12 shots to ~6-8. The AI now also leaves balls that are going out and has a human-like 0.15-0.3 s reaction time.
 - 2026-11-06: Git set up; repo `ferrannoah/cheaptennis` (public) with auto-deploy to GitHub Pages. M15 quick fixes done (menu double-step, skip between points, practice shots play out).
+- 2026-11-06: M16 speed balance (measured before/after), M17 Tactics School, M18 broadcast look. Playtest round 1 notes all handled; still needs a hand-played check of the new feel.

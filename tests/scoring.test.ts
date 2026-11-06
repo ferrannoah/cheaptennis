@@ -68,6 +68,23 @@ describe('game scoring', () => {
     win(s, 0, 2); // deuce
     expect(s.isBreakPoint()).toBe(false);
   });
+
+  it('labels the scoreboard pressure tab', () => {
+    const s = new Score({ kind: 'sets', bestOf: 3 }, 0);
+    expect(s.pressureLabel()).toBe('');
+    win(s, 1, 3); // 0-40 on player 0's serve
+    expect(s.pressureLabel()).toBe('BREAK POINT');
+    win(s, 1, 1);
+    // player 1 leads 5-0 in the first set and serves next... give player 0 games until set point
+    const t = new Score({ kind: 'sets', bestOf: 3 }, 0);
+    for (let g = 0; g < 5; g++) win(t, 0, 4); // 5-0 (holds and breaks)
+    win(t, 0, 3); // 40-0 at 5-0 -> set point
+    expect(t.pressureLabel()).toBe('SET POINT');
+    win(t, 0, 1); // set 1: 6-0
+    for (let g = 0; g < 5; g++) win(t, 0, 4);
+    win(t, 0, 3);
+    expect(t.pressureLabel()).toBe('MATCH POINT');
+  });
 });
 
 describe('set and match scoring', () => {

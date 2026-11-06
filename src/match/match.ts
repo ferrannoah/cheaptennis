@@ -11,6 +11,7 @@ import { PlayerSetup, ShotType, ServeType, Stats, STAT_KEYS } from '../data/type
 import { HALF_LEN, HALF_W, SERVICE_Y, BALL_R } from '../data/court';
 import { T } from '../data/tuning';
 import { TacticId, normalize, ARCHETYPE_BLEND } from '../data/tactics';
+import type { Venue } from '../data/venues';
 
 export interface MatchConfig {
   surface: SurfaceId;
@@ -22,6 +23,8 @@ export interface MatchConfig {
   seed?: number;
   /** practice: ball machine feeds to player 0, no scoring */
   practice?: PracticeFeed | null;
+  /** stadium look (cosmetic): theme, tier, how far into the event */
+  venue?: Venue;
 }
 
 export interface PracticeFeed {
@@ -933,6 +936,8 @@ export class Match {
       winner: this.score.winner,
       faults: this.serveFaults,
       phaseT: this.phaseT,
+      pressure: this.score.pressureLabel(),
+      setHistory: this.score.setHistory.map((s) => s.join('-')),
       skips: this.skips,
       canSkip: this.canSkipDowntime,
       walking: this.players.some((p) => p.autoWalk),

@@ -47,7 +47,13 @@ export class MatchScene implements Scene {
   enter(): void {
     audio.stopSong();
     audio.playSong('intro', false);
-    if (this.opts.title) this.view.showBanner(this.opts.title, `${this.m.players[0].setup.name}  vs  ${this.m.players[1].setup.name}`, 2.2);
+    const vs = `${this.m.players[0].setup.name}  vs  ${this.m.players[1].setup.name}`;
+    const v = this.view.venue;
+    if (this.view.look.introCard && v.round) {
+      // walk-on card for the big matches
+      this.view.showBanner(`${v.round.toUpperCase()}${v.tier === 'major' || v.tier === 'final' ? '  •  CENTRE COURT' : ''}`, `${v.name ? v.name + '  •  ' : ''}${vs}`, 2.8);
+      this.view.burstFlashes(Math.round(10 + 30 * v.stage));
+    } else if (this.opts.title) this.view.showBanner(this.opts.title, vs, 2.2);
   }
 
   label(p: 0 | 1): string {
@@ -134,6 +140,7 @@ export class MatchScene implements Scene {
           break;
         case 'serve': {
           const p = m.players[e.p];
+          v.lastServeKmh = e.kmh;
           audio.sfx(e.grade === 'PERFECT' ? 'hit_perfect' : 'hit_good', 1);
           if (e.grade === 'PERFECT') audio.sfx('perfect', 0.7);
           const typeLabel = e.type === 'flat' ? '' : e.type === 'kick' ? 'KICK ' : 'SLICE ';
@@ -166,7 +173,7 @@ export class MatchScene implements Scene {
           break;
         case 'point': {
           const big = e.rally >= 8 || e.how === 'ace' || e.how === 'winner';
-          audio.sfx(big ? 'applause_big' : 'applause_small', big ? 0.9 : 0.6);
+          audio.sfx(big ? 'applause_big' : 'applause_small', Math.min(1, (big ? 0.85 : 0.55) * v.look.noise));
           if (e.how === 'out' && Math.abs(Math.abs(m.rally.bounceX) - 4.115) < 0.4) audio.sfx('ooh', 0.8);
           break;
         }
@@ -186,6 +193,8 @@ export class MatchScene implements Scene {
           audio.playSong(!anyHuman || humanWon || m.players.every((p) => p.human) ? 'victory' : 'defeat', false);
           audio.sfx('applause_big', 1);
           m.crowdExcite = 1;
+          // the whole stadium lights up with camera flashes after match point in a final
+          v.burstFlashes(v.venue.stage >= 0.99 ? 90 : Math.round(20 * v.look.flashes));
           break;
         }
         case 'step':

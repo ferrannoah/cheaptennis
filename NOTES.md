@@ -15,26 +15,6 @@ unclear, and writes one prompt that it can then use to edit the game.
 ## Quick dump
 <!-- Don't want to sort? Put everything here. Claude will sort it. -->
 
-One thing is in the tutorial you should allow the shots to finish out instead of skipping to the next shot instantly for feedback.
-
-In game You should be able to press space to skip the players walking to their spots in between points seems pointless waste of time. 
-
-In the menu limit the arrow keys to do one option change currently when you press down it skips one option on the menu. 
-
-Overwall it seems pretty hard to win points on throwing fast balls into corners. I think the base players speed may be too fast. On the other end of that if you hit a perfect drop shot it almost always results in a point which doesnt seem to good either.
-
-Net play seems a little too strong aswell if youre at the net you can pretty much get to any ball and if you get a lob you can still get back to it again i think (im not sure) but i think this falls back on players are far too quick. 
-
-I think in general an idea is the tennis ball should be quicker then the person feeling obviously shot dependent but you get the idea.
-
-Ive also added a freetennis video to take a look at I do enjoy their player art a little more. Big racket little person 3 dimensional design kinda maybe change that aswell. 
-
-Also i want the score board to look more like a pro tennis scoreboard and also i would like the rolex backdrop that much of pro tennis events have maybe have a few maps dependent on ground type to machh the grand slams + regular events obviously the grand slams should feel grander especially as you approach the end of the tournament.
-
-Maybe make a tutorial for tactics again i want this to be like real tennis so maybe look up basic tennis tactics to win points and give a tutorial on that i dont want a tutorial to hack beat the computer obvioulsy just basic concepts. 
-
-I would also like forehand shots and backhand shots to look differnet in animation 2 hand backhand. 
-
 -
 
 ## Bugs (something is broken or wrong)
@@ -70,6 +50,26 @@ I would also like forehand shots and backhand shots to look differnet in animati
 
 ## Done
 <!-- Claude moves notes here after acting on them, with the date. -->
+
+### 2026-11-06: playtest round 1 (prompt: docs/NEXT_PROMPT.md)
+- Tutorial: let shots finish instead of skipping to the next one → **done**. Each shot plays out with an IN/OUT landing marker, then a 1 s pause (Space skips it), and a finished step waits for the ball.
+- Space to skip players walking to their spots between points → **done**. It also skips changeovers, and a "SPACE skip" hint shows.
+- Menu: one arrow press skipped two options → **fixed** (a held key was counted twice).
+- Hard to win points with fast balls into corners / players too fast / perfect drop shot almost always wins → **retuned**:
+  - players are ~17% slower and accelerate realistically
+  - balls are ~10% faster
+  - drop shots can be chased down
+  - corner shots now win outright ~18% of the time (was ~1%)
+- Net play too strong / you can still get back to lobs → **fixed**. Lobs fly higher and deeper, net players turn late, and smashing while backpedalling is off-balance. Lobs over a net player now win ~55% (was 18-39%).
+- Ball should be quicker than the person → that is the design rule behind the balance changes (see GDD §2.9c for the numbers).
+- Player art like the Free Tennis video (big racket, little person, 3D look) → **done** as an original design: big head, oversized racket with strings, shaded body.
+- Pro-style scoreboard → **done**: broadcast scoreboard top-left with set columns, a point box and a BREAK/SET/MATCH POINT tab.
+- Sponsor backdrop + maps per surface, grander Grand Slams near the end of the tournament → **done**:
+  - green-and-gold style sponsor boards with a clock, using made-up brands, since real logos like Rolex can't go in a public game
+  - a venue per surface, plus a night session
+  - Majors get banners, the event name on court, photographers and a fuller, louder crowd each round, with a walk-on card and a flash burst in the final
+- Tactics tutorial with real tennis concepts → **done**: Practice → Tactics School, 8 lessons with drills.
+- Forehand and backhand should look different (2-hand backhand) → **done**: distinct forehand, two-handed backhand, one-handed backhand, slice, drop and lob swings.
 
 ---
 

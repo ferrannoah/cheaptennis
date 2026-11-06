@@ -20,6 +20,7 @@ import { flipScore } from '../../sim/bracket';
 import { audio } from '../../core/audio';
 import { TrophyScene } from '../trophy';
 import { ovr } from '../../data/types';
+import { venueFor, stageFromDraw } from '../../data/venues';
 
 export class EventScene extends MenuScene {
   name = 'event';
@@ -61,8 +62,12 @@ export class EventScene extends MenuScene {
     const opp = proSetup(pro, 'COM');
     opp.city = oppRank ? `#${oppRank}` : 'Unranked';
     const fmt = careerFormat(s, run.tier);
+    // stadium: Majors and the Tour Finals get the grand venue (qualifying is on an outside court)
+    const tier = hm.isQual ? 'tour' : run.tier === 'major' ? 'major' : run.tier === 'finals' ? 'final' : 'tour';
+    const stage = hm.isQual ? 0 : hm.finalsIdx ? { rr: 0.6, sf: 0.85, f: 1 }[hm.finalsIdx.stage] : hm.bracket ? stageFromDraw(hm.bracket.size, hm.bracket.playersLeft()) : 0.4;
+    const venue = venueFor(ev.surface, { tier, stage, name: ev.name, round: hm.label });
     const start = () =>
-      game.goto(new MatchScene({ surface: ev.surface, format: fmt, players: [me, opp], controllers: [new Controller('p1', 'solo', 0), null], difficulty: settings.difficulty, seed: season.rng.int(0, 1e9) }, {
+      game.goto(new MatchScene({ surface: ev.surface, format: fmt, players: [me, opp], controllers: [new Controller('p1', 'solo', 0), null], difficulty: settings.difficulty, seed: season.rng.int(0, 1e9), venue }, {
         title: `${ev.name.toUpperCase()} • ${hm.label.toUpperCase()}`,
         onEnd: (r) => {
           const won = r.winner === 0 && !r.quit;

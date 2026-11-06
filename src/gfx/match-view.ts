@@ -13,6 +13,12 @@ import { T } from '../data/tuning';
 import { settings } from '../core/settings';
 import { SURFACES, SurfaceId } from '../data/surfaces';
 import { Grade } from '../match/shots';
+import { ShotType } from '../data/types';
+import { Venue, VenueLook, venueFor, venueKey, venueLook } from '../data/venues';
+import { BOARD_Y, CLOCK_X, SPEED_X } from './court';
+
+/** courtside photographers behind the far baseline (Majors / late rounds) */
+const PHOTOGRAPHERS: [number, number][] = [[-7.6, 18.7], [-5.6, 18.9], [5.4, 18.9], [7.4, 18.7]];
 
 export const GRADE_COLOR: Record<Grade | 'MISS', string> = {
   PERFECT: '#ffd23a', GOOD: '#9ef07a', EARLY: '#7fd0ff', LATE: '#ffa04a', MISHIT: '#ff6262', MISS: '#ff8a8a',
@@ -21,19 +27,26 @@ export const GRADE_COLOR: Record<Grade | 'MISS', string> = {
 interface Popup { text: string; sub: string; color: string; x: number; y: number; t: number; life: number; big: boolean }
 
 const bgCache = new Map<string, Layer>();
-export function courtLayer(sf: SurfaceId, cam: Camera = matchCam, key = 'match'): Layer {
-  const k = key + sf;
+export function courtLayer(sf: SurfaceId, cam: Camera = matchCam, key = 'match', venue: Venue = venueFor(sf)): Layer {
+  const k = key + sf + venueKey(venue);
   let l = bgCache.get(k);
   if (!l) {
-    l = new Layer((ctx) => drawCourtBackground(ctx, cam, SURFACES[sf], W, H));
+    l = new Layer((ctx) => drawCourtBackground(ctx, cam, SURFACES[sf], W, H, venue));
     bgCache.set(k, l);
+    // keep the cache small (each layer is a full-screen canvas)
+    if (bgCache.size > 6) bgCache.delete(bgCache.keys().next().value as string);
   }
   return l;
 }
 
 export class MatchView {
   cam = matchCam;
-  seats: Seat[] = makeCrowd();
+  venue: Venue;
+  look: VenueLook;
+  seats: Seat[];
+  /** camera flashes in the crowd / from courtside photographers */
+  flashes: { x: number; y: number; z: number; t: number }[] = [];
+  lastServeKmh = 0;
   particles = new Particles();
   popups: Popup[] = [];
   call: { text: string; t: number; color: string } | null = null;
@@ -45,6 +58,102 @@ export class MatchView {
 
   constructor(public m: Match) {
     this.netLayer = new Layer((ctx) => drawNet(ctx, this.cam));
+    this.venue = m.cfg.venue ?? venueFor(m.sf.id, { tier: m.practice ? 'practice' : 'tour' });
+    this.look = venueLook(this.venue);
+    this.seats = makeCrowd(7, this.look.standRows, this.look.empty);
+  }
+
+  /** a burst of camera flashes around the stadium (e.g. after match point in a final) */
+  burstFlashes(n: number): void {
+    for (let i = 0; i < n; i++) {
+      const s = this.seats[Math.floor(Math.random() * this.seats.length)];
+      if (s) this.flashes.push({ x: s.x, y: s.y, z: s.z + 0.5, t: -Math.random() * 0.6 });
+    }
+  }
+
+  private updateFlashes(dt: number): void {
+    const m = this.m;
+    for (const f of this.flashes) f.t += dt;
+    this.flashes = this.flashes.filter((f) => f.t < 0.12);
+    // flashes come at exciting moments, more in later rounds and at Majors
+    const rate = this.look.flashes * (m.phase === 'dead' || m.phase === 'over' ? 0.3 + m.crowdExcite * 1.6 : 0.05);
+    if (Math.random() < rate * dt) this.burstFlashes(1);
+    if (this.look.photographers && (m.phase === 'dead' || m.phase === 'over') && Math.random() < rate * dt * 0.6) {
+      const ph = PHOTOGRAPHERS[Math.floor(Math.random() * PHOTOGRAPHERS.length)];
+      this.flashes.push({ x: ph[0], y: ph[1], z: 0.75, t: 0 });
+    }
+    if (this.flashes.length > 120) this.flashes.splice(0, this.flashes.length - 120);
+  }
+
+  /** live parts of the back wall: clock hands and the serve-speed readout */
+  private drawWallLive(ctx: CanvasRenderingContext2D): void {
+    const th = this.venue.theme;
+    const cc = this.cam.project(CLOCK_X, BOARD_Y - 0.02, 0.5);
+    const r = 0.4 * cc.s;
+    const d = new Date();
+    const hA = ((d.getHours() % 12) + d.getMinutes() / 60) / 12 * Math.PI * 2;
+    const mA = (d.getMinutes() / 60) * Math.PI * 2;
+    ctx.strokeStyle = '#1b1b1b';
+    ctx.lineCap = 'round';
+    for (const [a, len, w] of [[hA, 0.5, 0.09], [mA, 0.75, 0.06]] as const) {
+      ctx.lineWidth = Math.max(1, cc.s * w);
+      ctx.beginPath();
+      ctx.moveTo(cc.x, cc.y);
+      ctx.lineTo(cc.x + Math.sin(a) * r * len, cc.y - Math.cos(a) * r * len);
+      ctx.stroke();
+    }
+    const sp = this.cam.project(SPEED_X, BOARD_Y - 0.02, 0.42);
+    const kmh = this.lastServeKmh ? `${Math.round(this.lastServeKmh)} KM/H` : '--- KM/H';
+    text(ctx, kmh, sp.x, sp.y, { size: Math.max(6, sp.s * 0.42), color: this.lastServeKmh ? th.boardText : 'rgba(255,255,255,0.35)', align: 'center', weight: 800 });
+  }
+
+  private drawPhotographers(ctx: CanvasRenderingContext2D): void {
+    if (!this.look.photographers) return;
+    for (const [x, y] of PHOTOGRAPHERS) {
+      const p = this.cam.project(x, y, 0);
+      const s = p.s;
+      // crouched figure in dark clothes with a long lens
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y, 0.4 * s, 0.15 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#2b2f3a';
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - 0.4 * s, 0.26 * s, 0.38 * s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#c99a72';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y - 0.85 * s, 0.13 * s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#111';
+      ctx.fillRect(p.x - 0.05 * s, p.y - 0.84 * s, 0.1 * s, 0.32 * s);
+    }
+  }
+
+  /** night session: the stands fall into darkness, the court stays under the lights */
+  private drawFloodlights(ctx: CanvasRenderingContext2D): void {
+    const c = this.cam.project(0, 0, 0);
+    const g = ctx.createRadialGradient(c.x, c.y, 120, c.x, c.y, 420);
+    g.addColorStop(0, 'rgba(6,10,30,0)');
+    g.addColorStop(1, 'rgba(6,10,30,0.55)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(255,250,220,0.04)';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  private drawFlashes(ctx: CanvasRenderingContext2D): void {
+    for (const f of this.flashes) {
+      if (f.t < 0) continue;
+      const p = this.cam.project(f.x, f.y, f.z);
+      const a = 1 - f.t / 0.12;
+      const r = Math.max(2, p.s * 0.5) * (0.6 + a * 0.6);
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
+      g.addColorStop(0, `rgba(255,255,255,${a})`);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(p.x - r, p.y - r, r * 2, r * 2);
+    }
   }
 
   private wearCtx(): CanvasRenderingContext2D {
@@ -97,12 +206,14 @@ export class MatchView {
   update(dt: number): void {
     this.time += dt;
     this.scorePulse = Math.max(0, this.scorePulse - dt * 2.5);
+    this.tab.t += dt;
     for (const pt of this.planTag) if (pt) pt.t += dt;
     if (this.ring) {
       this.ring.t += dt;
       if (this.ring.t > 0.3) this.ring = null;
     }
     this.particles.update(dt);
+    this.updateFlashes(dt);
     for (const p of this.popups) p.t += dt;
     this.popups = this.popups.filter((p) => p.t < p.life);
     if (this.call) {
@@ -131,10 +242,14 @@ export class MatchView {
     const sx = game.shakeX, sy = game.shakeY;
     ctx.save();
     ctx.translate(sx, sy);
-    courtLayer(m.sf.id).draw(ctx);
+    courtLayer(m.sf.id, this.cam, 'match', this.venue).draw(ctx);
     if (this.wear) ctx.drawImage(this.wear, 0, 0, W, H);
+    this.drawWallLive(ctx);
     const ballX = m.ballVisible ? m.ball.x : 0;
     drawCrowd(ctx, this.cam, this.seats, this.time, m.crowdExcite, ballX);
+    this.drawPhotographers(ctx);
+    if (this.venue.theme.night) this.drawFloodlights(ctx);
+    this.drawFlashes(ctx);
 
     // training HUD: predicted landing
     if (opts.training && m.predicted && m.ballLive && !m.rally.dead && m.rally.bounces === 0) {
@@ -276,9 +391,7 @@ export class MatchView {
         con = sw.fh ? POSES.dive : mirrorPose(POSES.dive);
         fol = con;
       } else {
-        back = sw.fh ? POSES.fhBack : POSES.bhBack;
-        con = sw.fh ? POSES.fhContact : POSES.bhContact;
-        fol = sw.fh ? POSES.fhFollow : POSES.bhFollow;
+        ({ back, con, fol } = strokePoses(sw.fh, sw.type, p.setup.twoHanded));
       }
       const a = W8 * 0.45;
       if (t < a) return lerpPose(POSES.ready, back, smooth(t / a));
@@ -317,37 +430,12 @@ export class MatchView {
     const sc = m.score;
     const [p0, p1] = m.players;
     if (!m.practice) {
-      // score line bottom-left
-      const l0 = p0.setup.short, l1 = p1.setup.short;
-      const pts = sc.tiebreak ? `${sc.points[0]} - ${sc.points[1]}` : `${sc.pointLabel(0)} - ${sc.pointLabel(1)}`;
-      const line = `${l0} ${pts} ${l1}`;
-      const key = line + sc.games.join() + sc.sets.join();
-      if (key !== this.scoreKey) {
-        if (this.scoreKey) this.scorePulse = 1;
-        this.scoreKey = key;
-      }
-      const bx = 10, by = H - 34;
-      ctx.fillStyle = `rgba(${10 + this.scorePulse * 200},${18 + this.scorePulse * 120},${34},0.62)`;
-      roundRect(ctx, bx - 4, by - 13, 196, 42, 9);
-      ctx.fill();
-      // serve dot
-      const dotX = bx + 4;
-      const ps = 1 + this.scorePulse * 0.18;
-      ctx.save();
-      ctx.translate(bx + 12, by);
-      ctx.scale(ps, ps);
-      text(ctx, line, 0, 0, { size: 16, color: '#fff' });
-      ctx.restore();
-      ctx.fillStyle = '#d8f03a';
-      ctx.beginPath();
-      ctx.arc(dotX, by + (sc.server === 0 ? 0 : 0), 3.5, 0, Math.PI * 2);
-      if (sc.server === 0) ctx.fill();
-      let sub = sc.isGamesFormat ? `Games ${sc.games[0]}-${sc.games[1]}` : `Sets ${sc.sets[0]}-${sc.sets[1]}  Games ${sc.games[0]}-${sc.games[1]}`;
-      if (sc.tiebreak) sub += '  TIEBREAK';
-      text(ctx, sub, bx + 12, by + 17, { size: 11, color: '#cfe3ff', weight: 700 });
-      if (sc.server === 1) {
-        text(ctx, '●', bx + 182, by, { size: 9, color: '#d8f03a', align: 'right' });
-      }
+      const sbH = this.drawScoreboard(ctx, 8, 8);
+      // stamina bars + COM game plans: far player under the scoreboard, near player bottom-left
+      this.staminaBar(ctx, p1, 10, 8 + sbH + 8, p1.setup.short);
+      this.planChip(ctx, 1, 10, 8 + sbH + 28);
+      this.staminaBar(ctx, p0, 10, H - 22, p0.setup.short);
+      this.planChip(ctx, 0, 10, H - 36);
     } else {
       const bx = 10, by = H - 34;
       ctx.fillStyle = 'rgba(10,18,34,0.62)';
@@ -355,14 +443,7 @@ export class MatchView {
       ctx.fill();
       text(ctx, `PERFECT streak ${m.practiceStreak}  (best ${m.practiceBest})`, bx + 6, by, { size: 13 });
       text(ctx, `Hits ${m.practiceHits}`, bx + 6, by + 17, { size: 11, color: '#cfe3ff', weight: 700 });
-    }
-    // stamina bars
-    this.staminaBar(ctx, p0, 10, H - 58, p0.setup.short);
-    if (!m.practice) this.staminaBar(ctx, p1, 10, 10, p1.setup.short);
-    // COM game plan tags
-    if (!m.practice) {
-      this.planChip(ctx, 1, 10, 30);
-      this.planChip(ctx, 0, 10, H - 74);
+      this.staminaBar(ctx, p0, 10, H - 58, p0.setup.short);
     }
 
     // timing meters
@@ -400,6 +481,113 @@ export class MatchView {
       if (b.sub) text(ctx, b.sub, W / 2, y + 22, { size: 14, align: 'center', color: '#ffd479', weight: 700 });
       ctx.restore();
     }
+  }
+
+  /** pressure tab state for the scoreboard ("BREAK POINT" etc.) */
+  private tab = { label: '', t: 0 };
+
+  /**
+   * Broadcast-style scoreboard: one row per player (far player on top, like the court):
+   * colour chip, name (+ ranking), serve ball, completed sets, current games, point box.
+   * Returns its height.
+   */
+  private drawScoreboard(ctx: CanvasRenderingContext2D, x: number, y: number): number {
+    const m = this.m;
+    const sc = m.score;
+    const key = sc.points.join() + sc.games.join() + sc.sets.join();
+    if (key !== this.scoreKey) {
+      if (this.scoreKey) this.scorePulse = 1;
+      this.scoreKey = key;
+    }
+    const rowH = 20;
+    const nameW = 128;
+    const colW = 19;
+    const sets = sc.isGamesFormat ? [] : sc.setHistory;
+    const cols = sets.length + 1; // completed sets + current games
+    const ptsW = 32;
+    const w = 10 + nameW + cols * colW + ptsW + 4;
+    const h = rowH * 2 + 4;
+    const order: (0 | 1)[] = [1, 0];
+    // frame
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 2;
+    const bg = ctx.createLinearGradient(0, y, 0, y + h);
+    bg.addColorStop(0, '#16284a');
+    bg.addColorStop(1, '#0b1730');
+    ctx.fillStyle = bg;
+    roundRect(ctx, x, y, w, h, 5);
+    ctx.fill();
+    ctx.restore();
+    // event strip on the left edge
+    ctx.fillStyle = '#ffb02e';
+    roundRect(ctx, x, y, 4, h, 2);
+    ctx.fill();
+    order.forEach((pi, r) => {
+      const p = m.players[pi];
+      const ry = y + 2 + r * rowH;
+      const cy = ry + rowH / 2;
+      if (r === 1) {
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(x + 4, ry, w - 4, 1);
+      }
+      // colour chip (kit) + serve ball
+      ctx.fillStyle = p.setup.kit.shirt;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      roundRect(ctx, x + 9, cy - 5, 12, 10, 2);
+      ctx.fill();
+      ctx.stroke();
+      const nm = (p.setup.name.split(' ').slice(-1)[0] || p.setup.short).toUpperCase();
+      const rank = p.setup.city?.startsWith('#') ? p.setup.city : '';
+      text(ctx, nm, x + 26, cy + 0.5, { size: 11, color: '#fff', maxWidth: nameW - 44 });
+      if (rank) text(ctx, rank, x + nameW - 8, cy + 0.5, { size: 8, color: '#9fb6da', align: 'right', weight: 700 });
+      if (sc.server === pi && sc.winner < 0) {
+        ctx.fillStyle = '#d8f03a';
+        ctx.beginPath();
+        ctx.arc(x + nameW + 2, cy, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // completed sets (winner's number bright)
+      sets.forEach((s, i) => {
+        const won = s[pi] > s[1 - pi];
+        text(ctx, String(s[pi]), x + 10 + nameW + i * colW + colW / 2, cy + 0.5, { size: 12, align: 'center', color: won ? '#ffffff' : '#7f93b5' });
+      });
+      // current games (highlighted column)
+      const gx = x + 10 + nameW + sets.length * colW;
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(gx, ry + 1, colW, rowH - 2);
+      text(ctx, String(sc.games[pi]), gx + colW / 2, cy + 0.5, { size: 12, align: 'center', color: '#ffffff' });
+      // point box
+      const px = gx + colW + 2;
+      const flash = this.scorePulse;
+      ctx.fillStyle = `rgb(${Math.round(255 - 20 * (1 - flash))},${Math.round(196 + 50 * flash)},${Math.round(46 + 160 * flash)})`;
+      roundRect(ctx, px, ry + 2, ptsW - 2, rowH - 4, 3);
+      ctx.fill();
+      const lbl = sc.winner >= 0 ? '' : sc.pointLabel(pi);
+      text(ctx, lbl, px + (ptsW - 2) / 2, cy + 0.5, { size: 12, align: 'center', color: '#13284a' });
+    });
+    // pressure tab sliding out to the right
+    const label = sc.pressureLabel();
+    if (label !== this.tab.label) this.tab = { label, t: 0 };
+    if (label) {
+      const k = Math.min(1, this.tab.t * 4);
+      const e = 1 - Math.pow(1 - k, 3);
+      ctx.save();
+      ctx.font = font(10);
+      const tw = ctx.measureText(label).width + 18;
+      ctx.beginPath();
+      ctx.rect(x + w, y, tw + 4, h);
+      ctx.clip();
+      const tx = x + w - tw + tw * e + 2;
+      ctx.fillStyle = label === 'MATCH POINT' ? '#e0393e' : label === 'TIEBREAK' ? '#3a7bd5' : '#ff8a1e';
+      roundRect(ctx, tx, y + h / 2 - 10, tw, 20, 4);
+      ctx.fill();
+      ctx.restore();
+      if (e > 0.6) text(ctx, label, x + w + 2 + tw / 2, y + h / 2 + 0.5, { size: 10, align: 'center', color: '#fff' });
+    }
+    return h;
   }
 
   private planChip(ctx: CanvasRenderingContext2D, i: 0 | 1, x: number, y: number): void {
@@ -556,6 +744,21 @@ export class MatchView {
       ctx.restore();
     }
   }
+}
+
+/** Ground-stroke key poses: forehand vs (two- or one-handed) backhand, plus slice, drop and lob variants. */
+export function strokePoses(fh: boolean, type: ShotType, twoHanded: boolean): { back: Pose; con: Pose; fol: Pose } {
+  if (type === 'slice' || type === 'drop') {
+    const back = fh ? POSES.fhSliceBack : POSES.bhSliceBack;
+    const con = fh ? POSES.fhSliceContact : POSES.bhSliceContact;
+    const fol = fh ? POSES.fhSliceFollow : POSES.bhSliceFollow;
+    // the drop shot is a short, soft version of the slice
+    if (type === 'drop') return { back: lerpPose(POSES.ready, back, 0.65), con, fol: lerpPose(con, fol, 0.45) };
+    return { back, con, fol };
+  }
+  if (fh) return { back: POSES.fhBack, con: POSES.fhContact, fol: type === 'lob' ? POSES.lobFollow : POSES.fhFollow };
+  if (twoHanded) return { back: POSES.bhBack, con: POSES.bhContact, fol: type === 'lob' ? lerpPose(POSES.bhFollow, POSES.lobFollow, 0.5) : POSES.bhFollow };
+  return { back: POSES.bh1Back, con: POSES.bh1Contact, fol: type === 'lob' ? lerpPose(POSES.bh1Follow, POSES.lobFollow, 0.5) : POSES.bh1Follow };
 }
 
 function mirrorPose(p: Pose): Pose {

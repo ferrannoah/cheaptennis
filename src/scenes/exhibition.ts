@@ -14,6 +14,7 @@ import { rng } from '../core/rng';
 import { TitleScene } from './title';
 import { ARCHETYPES } from '../data/archetypes';
 import { TACTICS, TACTIC_IDS, TacticId, TacticBlend, normalize, pureBlend } from '../data/tactics';
+import { venueFor } from '../data/venues';
 
 type PlanChoice = 'auto' | 'random' | TacticId;
 const PLANS: PlanChoice[] = ['auto', ...TACTIC_IDS, 'random'];
@@ -29,6 +30,7 @@ export class ExhibitionSetup extends MenuScene {
   format: FormatId = '3games';
   oppIdx = -1; // -1 random
   plan: PlanChoice = 'auto';
+  night = false;
   pool: Pro[];
   constructor() {
     super();
@@ -53,6 +55,11 @@ export class ExhibitionSetup extends MenuScene {
         hint: this.plan === 'auto' ? "The pro's own mix of tactics; adapts during the match" : this.plan === 'random' ? 'A random mix of all five tactics; adapts during the match' : `${TACTICS[this.plan].desc} (forced, no adapting)`,
       },
       { id: 'difficulty', label: 'Difficulty', value: DIFF_LABEL[settings.difficulty], change: (d) => { settings.difficulty = cycle(DIFFS, settings.difficulty, d); saveSettings(); }, hint: 'Difficulty adjusts COM stats and timing, never the physics' },
+      {
+        id: 'session', label: 'Session', value: this.surface === 'hard' && this.night ? 'Night' : 'Day',
+        change: () => { if (this.surface === 'hard') this.night = !this.night; },
+        hint: this.surface === 'hard' ? 'Play under the lights in the night session' : 'Night sessions are played on hard courts',
+      },
       { id: 'start', label: 'Start Match', action: () => this.start() },
       { id: 'back', label: 'Back', action: () => game.goto(new TitleScene()) },
     ];
@@ -74,10 +81,11 @@ export class ExhibitionSetup extends MenuScene {
     }
     const surface = this.surface;
     const format = FORMATS[this.format].f;
+    const venue = venueFor(surface, { tier: 'tour', stage: 0.45, night: surface === 'hard' && this.night });
     const startMatch = () => {
       game.goto(new MatchScene({
         surface, format, players: [a, b], controllers: [new Controller('p1', 'solo', 0), null], difficulty: settings.difficulty,
-        seed: Math.floor(rng.next() * 1e9),
+        seed: Math.floor(rng.next() * 1e9), venue,
       }, {
         title: 'EXHIBITION',
         onEnd: (r) => game.goto(new ResultScene(r, [a, b], () => startMatch(), () => game.goto(new ExhibitionSetup()))),

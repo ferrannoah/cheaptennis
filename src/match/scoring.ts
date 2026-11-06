@@ -86,6 +86,16 @@ export class Score {
     return this.sets[p] + 1 >= this.setsToWin();
   }
 
+  /** broadcast pressure tab: MATCH POINT > SET POINT (GAME POINT in short formats) > BREAK POINT > TIEBREAK */
+  pressureLabel(): string {
+    if (this.winner >= 0) return '';
+    if (this.isMatchPointFor(0) || this.isMatchPointFor(1)) return 'MATCH POINT';
+    if (this.isSetPointFor(0) || this.isSetPointFor(1)) return this.isGamesFormat ? 'GAME POINT' : 'SET POINT';
+    if (this.isBreakPoint()) return 'BREAK POINT';
+    if (this.tiebreak) return 'TIEBREAK';
+    return '';
+  }
+
   isBigPoint(): boolean {
     return this.isBreakPoint() || this.isSetPointFor(0) || this.isSetPointFor(1) || (this.tiebreak && this.pointsInGame >= 10);
   }

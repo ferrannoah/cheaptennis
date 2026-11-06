@@ -17,6 +17,8 @@ import { PracticeSetup, makeTutorial, practiceMatch } from './practice';
 import { OptionsScene, RemapScene } from './options';
 import { TacticsSchool, LessonCard, makeLessonMatch } from './tactics-school';
 import { LESSONS, lessonById } from '../data/lessons';
+import { PoseGallery } from '../testing/pose-gallery';
+import { venueFor } from '../data/venues';
 import { CareerMenu } from './career/menu';
 import { CreateScene } from './career/create';
 import { HubScene } from './career/hub';
@@ -51,7 +53,7 @@ export function registerScenes(): void {
       const b = proSetup(roster()[4]);
       return new StatCardScene(a, b, p?.surface ?? 'grass', 'EXHIBITION', () => {});
     },
-    match: (p?: { surface?: SurfaceId; format?: FormatId; ai?: boolean; opp?: number; seed?: number; versus?: 'kb' | 'pad'; stamina?: number; stamina2?: number }) => {
+    match: (p?: { surface?: SurfaceId; format?: FormatId; ai?: boolean; opp?: number; seed?: number; versus?: 'kb' | 'pad'; stamina?: number; stamina2?: number; venue?: Parameters<typeof venueFor>[1] }) => {
       const a = humanSetup(p?.versus ? 'Player 1' : 'You', p?.versus ? 'P1' : 'YOU');
       if (p?.stamina !== undefined) a.startStamina = p.stamina;
       const b = p?.versus ? humanSetup('Player 2', 'P2', P2_KIT) : proSetup(roster()[p?.opp ?? 20]);
@@ -62,6 +64,7 @@ export function registerScenes(): void {
       return new MatchScene({
         surface: p?.surface ?? 'grass', format: FORMATS[p?.format ?? '3games'].f, players,
         controllers: [c1, c2], difficulty: settings.difficulty, seed: p?.seed ?? 99,
+        venue: p?.venue ? venueFor(p?.surface ?? 'grass', p.venue) : undefined,
       }, { onEnd: (r) => game.goto(new ResultScene(r, players, null, () => game.goto(new TitleScene()))) });
     },
     tournament: () => new TournamentSetup(),
@@ -71,6 +74,7 @@ export function registerScenes(): void {
     practice: () => new PracticeSetup(),
     tutorial: () => makeTutorial('hard'),
     tactics: () => new TacticsSchool('hard', () => game.goto(new PracticeSetup())),
+    posegallery: (p?: { view?: 'back' | 'front'; lefty?: boolean }) => new PoseGallery(p?.view ?? 'back', !!p?.lefty),
     lesson: (p?: { id?: string; card?: 'intro' | 'done' }) => {
       const l = lessonById(p?.id ?? 'cross') ?? LESSONS[0];
       const back = () => game.goto(new PracticeSetup());
