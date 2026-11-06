@@ -30,13 +30,15 @@ export interface ShotInput {
   rng: Rng;
   /** risk/reward intent: >1 hits harder with more error, <1 plays safe (AI game plans) */
   power?: number;
+  /** 0..1: how fast the hitter was running back towards their own baseline at contact */
+  backpedal?: number;
 }
 
 export interface ShotOutput {
   ball: BallState;
   label: Grade;
   reason: string;
-  factor: 'timing' | 'running' | 'stretch' | 'low' | 'jammed' | 'tired' | 'high';
+  factor: 'timing' | 'running' | 'stretch' | 'low' | 'jammed' | 'tired' | 'high' | 'backpedal';
   pace: number;
   tx: number;
   ty: number;
@@ -148,9 +150,10 @@ function netCrossZ(b0: BallState, sf: Surface): number {
   return NaN;
 }
 
-const BASE_DEPTH: Record<ShotType, number> = { normal: 9.0, topspin: 9.3, slice: 8.4, lob: 9.9, drop: 2.4 };
-const BASE_PACE: Record<ShotType, number> = { normal: 23, topspin: 21, slice: 18.5, lob: 13, drop: 9 };
-const MARGIN: Record<ShotType, number> = { normal: 0.4, topspin: 0.8, slice: 0.25, lob: 2.2, drop: 0.14 };
+// (M16: groundstrokes ~10% faster so placement beats footspeed; drops land a little deeper)
+const BASE_DEPTH: Record<ShotType, number> = { normal: 9.0, topspin: 9.3, slice: 8.4, lob: 10.6, drop: 2.8 };
+const BASE_PACE: Record<ShotType, number> = { normal: 25.3, topspin: 23.1, slice: 19.5, lob: 13, drop: 9 };
+const MARGIN: Record<ShotType, number> = { normal: 0.4, topspin: 0.8, slice: 0.25, lob: 3.4, drop: 0.22 };
 const BASE_ERR: Record<ShotType, number> = { normal: 0.038, topspin: 0.034, slice: 0.032, lob: 0.04, drop: 0.045 };
 
 export function gradeReason(g: Grade, offset: number): string {
@@ -185,11 +188,12 @@ export function makeShot(inp: ShotInput, sf: Surface): ShotOutput {
   const tiredF = f < T.lowStamina / 100 ? 1 + (T.lowStamina / 100 - f) * 2.2 : 1;
   const volleyBadge = inp.volley && inp.badges.includes('netMagnet') ? 0.8 : 1;
   const power = inp.power ?? 1;
-  const errMul = timingF * runningF * stretchF * lowF * highF * jamF * tiredF * (1.55 - statF * 0.95) * volleyBadge * (1 + (power - 1) * 2.5);
+  const backF = 1 + (inp.backpedal ?? 0) * T.backpedalErr;
+  const errMul = timingF * runningF * stretchF * lowF * highF * jamF * tiredF * backF * (1.55 - statF * 0.95) * volleyBadge * (1 + (power - 1) * 2.5);
 
   // pick the dominant non-timing factor for the popup
   const factors: [ShotOutput['factor'], number][] = [
-    ['running', runningF], ['stretch', stretchF], ['low', lowF], ['jammed', jamF], ['tired', tiredF], ['high', highF],
+    ['running', runningF], ['stretch', stretchF], ['low', lowF], ['jammed', jamF], ['tired', tiredF], ['high', highF], ['backpedal', backF],
   ];
   factors.sort((a, b) => b[1] - a[1]);
   let factor: ShotOutput['factor'] = 'timing';
@@ -203,6 +207,7 @@ export function makeShot(inp: ShotInput, sf: Surface): ShotOutput {
       jammed: 'Jammed: ball too close',
       tired: 'Tired: timing window shrinking',
       high: 'Too high: ball above the shoulder',
+      backpedal: 'Off-balance: backpedalling',
       timing: reason,
     }[factors[0][0]];
   }
@@ -226,10 +231,11 @@ export function makeShot(inp: ShotInput, sf: Surface): ShotOutput {
   pace *= 0.86 + 0.14 * Math.min(1, f * 1.6);
   pace *= inp.speedRatio > 0.5 ? 0.94 : 1;
   pace *= 1 - inp.stretch * 0.25;
+  pace *= 1 - (inp.backpedal ?? 0) * 0.25;
   if (inp.contactZ < 0.35 && !inp.volley) pace *= 0.85;
   if (type !== 'lob' && type !== 'drop') pace *= power;
 
-  let spin = { normal: 0.3, topspin: 0.75 + 0.55 * (stats.spin / 99), slice: -0.85, lob: 0.45, drop: -1.9 }[type];
+  let spin = { normal: 0.3, topspin: 0.75 + 0.55 * (stats.spin / 99), slice: -0.85, lob: 0.45, drop: -T.dropBackspin }[type];
   if (inp.volley && type === 'normal') spin = -0.25;
   let side = 0;
   let margin = MARGIN[type];
@@ -238,7 +244,11 @@ export function makeShot(inp: ShotInput, sf: Surface): ShotOutput {
 
   // ---- grade biases
   let floatK = 1;
-  if (inp.grade === 'EARLY') {
+  if (inp.grade === 'PERFECT' && type !== 'drop' && type !== 'lob') {
+    // clean contact: a flatter, deeper drive that skims lower over the net
+    depth += 0.7;
+    margin *= 0.75;
+  } else if (inp.grade === 'EARLY') {
     const e = Math.min(1, Math.max(0, (inp.offset - T.goodWin) / (T.earlyMax - T.goodWin)));
     depth += 0.9 + 2.2 * e;
     floatK = 1.12 + 0.12 * e;
@@ -258,8 +268,9 @@ export function makeShot(inp: ShotInput, sf: Surface): ShotOutput {
   // ---- flight time
   const dist = Math.hypot(tx - inp.from.x, ty - inp.from.y);
   let flightT: number;
-  if (type === 'lob') flightT = 1.9 + 0.35 * (depth / 10) + (inp.grade === 'MISHIT' ? -0.5 : 0);
-  else if (type === 'drop') flightT = 1.0 + (inp.grade === 'EARLY' ? 0.2 : 0);
+  if (type === 'lob') flightT = T.lobFlight + 0.3 * (depth / 10) + (inp.grade === 'MISHIT' ? -0.5 : 0);
+  // drops hang in the air longer the further back they are hit from (easier to chase down)
+  else if (type === 'drop') flightT = T.dropFlight + T.dropFlightPerM * Math.max(0, Math.abs(inp.from.y) - 6) + (inp.grade === 'EARLY' ? 0.2 : 0);
   else flightT = dist / (pace * 0.93);
   flightT *= floatK;
 
@@ -302,8 +313,8 @@ export function makeServe(inp: ServeInput, sf: Surface): { ball: BallState; spee
   const s = Math.sign(inp.serverX) || 1;
   const boxMid = -s * 2.05;
   let tx = boxMid + inp.aimX * 1.45;
-  const lo = s > 0 ? -HALF_W + 0.5 : 0.45;
-  const hi = s > 0 ? -0.45 : HALF_W - 0.5;
+  const lo = s > 0 ? -HALF_W + 0.38 : 0.35;
+  const hi = s > 0 ? -0.35 : HALF_W - 0.38;
   tx = Math.min(hi, Math.max(lo, tx));
   const ty = inp.dir * (inp.type === 'kick' ? 5.3 : 5.75);
   const statF = inp.stats.serve / 99;

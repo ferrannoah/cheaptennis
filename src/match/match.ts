@@ -630,10 +630,12 @@ export class Match {
     const volley = this.rally.bounces === 0;
     const overhead = volley && b.z > T.overheadZ;
     const isReturn = this.rally.isServe;
+    // hitting a ball in the air while running back (chasing a lob) is awkward
+    const backpedal = volley ? Math.max(0, Math.min(1, (-p.vy * p.dir) / Math.max(1, p.maxSpeed(this.sf) * T.backpedalMul))) : 0;
     const shot = makeShot({
       type: sw.type, from: cloneBall(b), dir: p.dir, aimX, aimDepth, grade: sw.grade!, offset: sw.offset,
       stats: p.stats, stamina: p.stamina, speedRatio: p.speedRatio(this.sf), stretch, contactZ: b.z, lateral: lat,
-      sideSign: Math.sign(dx) || 1, fh: sw.fh, volley, overhead, isReturn, badges: p.setup.badges, rng: this.rng, power: p.swingPower,
+      sideSign: Math.sign(dx) || 1, fh: sw.fh, volley, overhead, isReturn, badges: p.setup.badges, rng: this.rng, power: p.swingPower, backpedal,
     }, this.sf);
     this.ball = shot.ball;
     this.rally.lastHitter = p.idx;
@@ -690,7 +692,8 @@ export class Match {
       if (this.rally.bounces === 0) {
         if (this.rally.isServe) this.fault('FAULT', 'fault');
         else this.endPoint((1 - hitter) as 0 | 1, 'out', 'OUT!');
-      } else this.endPoint(hitter, 'winner', '');
+      } else if (this.rally.isServe) this.endPoint(hitter, 'ace', 'ACE!'); // an untouched serve that flew past the returner
+      else this.endPoint(hitter, 'winner', '');
       return;
     }
     if (ev === 'bounce') {

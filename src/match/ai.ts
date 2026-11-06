@@ -160,7 +160,11 @@ export class AI {
 
     if (incoming) {
       if (this.planFor !== m.rally.shotCount || m.frame >= this.replanAt) {
-        const reactFrames = this.planFor !== m.rally.shotCount ? Math.round((9 + 9 * (1 - p.stats.footwork / 99)) * Math.sqrt(this.noise)) : 0;
+        let reactFrames = this.planFor !== m.rally.shotCount ? Math.round((9 + 9 * (1 - p.stats.footwork / 99)) * Math.sqrt(this.noise)) : 0;
+        // lobbed at the net: it takes a moment to read it and turn around
+        if (reactFrames && Math.abs(p.y) < 6.5 && m.ball.vz > 5) reactFrames += T.netLobReact;
+        // reading a serve takes longer than reading a rally ball
+        if (reactFrames && m.rally.isServe) reactFrames += T.returnReact;
         if (this.planFor !== m.rally.shotCount) {
           this.planFor = m.rally.shotCount;
           this.plan = null;
@@ -254,7 +258,6 @@ export class AI {
     }
     const b = cloneBall(m.ball);
     let bounces = m.rally.bounces;
-    const max = p.maxSpeed(m.sf);
     const dir = p.dir;
     const fs = fhSign(p);
     let best: { f: number; x: number; y: number; z: number; cost: number; vol: boolean } | null = null;
@@ -274,9 +277,10 @@ export class AI {
       const side = naturalFh || this.useFh ? fs : -fs;
       const px = b.x - 0.75 * side;
       const py = b.y - dir * T.contactAhead;
-      const dist = Math.hypot(px - p.x, py - p.y);
       const tAvail = (f - 3) / 60;
-      const need = dist / (max * 0.92) + 0.08;
+      let need = p.timeTo(px, py, m.sf) + 0.06;
+      // a smash while running back needs time to get set under the ball
+      if (vol && b.z > T.overheadZ && (py - p.y) * dir < -0.5) need += T.overheadSetup;
       if (need <= tAvail) {
         let cost = Math.abs(b.z - 1.0) * 2;
         cost += (f / 60) * (this.eff.aggression - 0.4) * 2.2;

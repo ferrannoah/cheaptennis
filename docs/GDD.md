@@ -189,6 +189,25 @@ Five tactics based on common singles coaching patterns (all values in `src/data/
 - **Exhibition:** pick the COM's natural blend, any single forced tactic (no adapting), or a random blend.
 - **Stat sim:** blends shift point odds slightly by surface fit and matchups (Net beats Grind, Counter beats Net, Serve + 1 beats Counter, Grind beats Serve + 1, Forehand Dominance beats Grind), so tournament and career results reflect styles too.
 
+### 2.9c Speed balance (playtest round 1, M16)
+Design rule: **the ball should beat the player.** A well-placed ball wins; a ball hit down the middle doesn't. All values are in `src/data/tuning.ts` (shot paces in `src/match/shots.ts`).
+- **Movement:** top speed 4.5 + 1.9 × footwork/99 m/s (was 5.4 + 2.3; ~17% slower). Acceleration 22 m/s² and braking 36 (were 46/64), so full speed takes ~0.3 s and a wrong-footed player must stop before turning. Running back toward your own baseline is capped at 72% speed. Stretch reach is 1.8 m (was 1.95).
+- **Ball:** groundstroke base pace +10% (normal 25.3, topspin 23.1, slice 19.5 m/s). PERFECT contact lands 0.7 m deeper and skims lower over the net. First serves go up to ~175-185 km/h (flat 47, kick 34.5, slice 39 m/s base), and serves can be aimed 0.38 m from the lines.
+- **Drop shots:** float longer the further back they're hit from (1.4 s + 0.06 s per metre beyond 6 m), land 2.8 m from the net, have less backspin (1.45, was 1.9) and a 0.22 m net margin. A baseline player can now usually reach a drop.
+- **Lobs:** fly higher (3.4 m net margin, 1.85 s + 0.3 s per 10 m) and aim deeper (10.6 m). A net player who is lobbed reacts 0.3 s later (turning around). Smashing while backpedalling needs 0.3 s extra to set up. Any ball hit in the air while running back gets up to +220% error and −25% pace ("Off-balance: backpedalling").
+- **Returns:** the COM reads a serve 8 frames slower than a rally ball.
+- **Bug fix:** an untouched serve that flew past the returner was scored as a plain winner and never called "ACE!".
+- **Measured** in `tests/balance.test.ts` (AI vs AI, about 1,600 points over the three surfaces):
+
+| Metric | Before | After |
+|---|---|---|
+| Average rally (shots) | 6.7-6.9 | 5.3-5.7 |
+| Corner shots won outright | 0-2% | 17-19% |
+| Shots down the middle won outright | 0-1% | 0-1% |
+| Drops won vs. a player at the baseline | 43-71% (PERFECT 50-83%) | 46-70%, about 53% pooled (PERFECT about 59%) |
+| Lobs won vs. a net player | 18-39% | 52-58% |
+| Aces | 0% (never called) | 3-6% (most on grass) |
+
 ### 2.10 Umpire & crowd
 Text calls ("OUT!", "FAULT!", "DOUBLE FAULT", "LET", "DEUCE", "ADVANTAGE …", "GAME …", "SET …", "GAME, SET AND MATCH") with synth stings; crowd applause scaled by rally length and shot quality; "ooh" on near misses and PERFECT winners; hush during serves.
 

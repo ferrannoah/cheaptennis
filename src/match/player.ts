@@ -114,6 +114,34 @@ export class Player {
     return T.accel * g * (0.85 + 0.3 * (this.stats.footwork / 99)) * this.speedMul();
   }
 
+  /**
+   * Seconds to run to (tx, ty) from the current position and velocity, accounting for
+   * acceleration, braking when running the wrong way, and slower backpedalling.
+   */
+  timeTo(tx: number, ty: number, sf: Surface): number {
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    let d = Math.hypot(dx, dy);
+    if (d < 1e-3) return 0;
+    const ux = dx / d;
+    const uy = dy / d;
+    const a = this.accel(sf);
+    let vmax = this.maxSpeed(sf);
+    if (uy * this.dir < 0) vmax *= Math.hypot(ux, uy * T.backpedalMul);
+    let v0 = this.vx * ux + this.vy * uy;
+    let t = 0;
+    if (v0 < 0) {
+      // wrong-footed: first stop
+      t += -v0 / a;
+      d += (v0 * v0) / (2 * a);
+      v0 = 0;
+    }
+    v0 = Math.min(v0, vmax);
+    const da = (vmax * vmax - v0 * v0) / (2 * a);
+    if (d <= da) return t + (-v0 + Math.sqrt(v0 * v0 + 2 * a * d)) / a;
+    return t + (vmax - v0) / a + (d - da) / vmax;
+  }
+
   speedRatio(sf: Surface): number {
     return Math.hypot(this.vx, this.vy) / this.maxSpeed(sf);
   }
@@ -132,7 +160,9 @@ export class Player {
   move(mx: number, my: number, sf: Surface, slowed: boolean): void {
     const max = this.maxSpeed(sf) * (slowed ? T.swingMoveMult : 1);
     const tvx = mx * max;
-    const tvy = -my * max;
+    let tvy = -my * max;
+    // running back towards your own baseline (e.g. chasing a lob) is slower
+    if (tvy * this.dir < 0) tvy *= T.backpedalMul;
     const a = this.accel(sf) / 60;
     const d = (T.decel * sf.grip) / 60;
     const ax = tvx - this.vx;

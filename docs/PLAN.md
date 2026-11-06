@@ -93,7 +93,14 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` verified
 - [x] One arrow tap moves a menu one row; holding repeats after 22 frames, then every 6. *(menu-input.spec: real key events held 1/3/8/15 frames move exactly 1 row on the title and Exhibition menus; a 40-frame hold moves 2-4)*
 - [x] Space skips the dead time and the walk to position between points (also changeovers); the press does not toss. A "SPACE skip" hint shows when available. *(skip-walk.spec: point is scored, players snapped, serve still 'ready')*
 - [x] Practice/tutorial: each shot plays out (IN ring / OUT cross on the landing spot, OUT/NET calls), then a 1 s pause before the next feed (Space skips after 0.25 s). A tutorial step finished by a hit waits for that ball, shows STEP COMPLETE!, then moves on. *(practice-playout.spec)*
-### M16: Speed balance: measure, then retune (see NEXT_PROMPT.md B)
+### M16: Speed balance: measure, then retune
+- [x] Balance harness `tests/balance.test.ts`: AI-vs-AI across archetypes, about 530 points per surface. It measures rally length, corner vs. middle outright winners, drop and lob outcomes, aces, unreturned serves and double faults, and asserts the targets. The before/after table is in GDD §2.9c.
+- [x] Players are ~17% slower with real momentum (acceleration 46→22 m/s²) and backpedal at 72% speed. The COM plans its run with the same acceleration model (`Player.timeTo`).
+- [x] Groundstrokes are +10% faster, PERFECT drives land deeper, and serves are up to ~180 km/h. Corner outright winners went from 0-2% to 17-19%, and rallies are 5.3-5.7 shots.
+- [x] Drop shots float longer and die less. Against a baseline player they win about 53% pooled (was up to 71%, and 83% for PERFECT drops).
+- [x] Lobs fly higher and deeper, a net player turns late, and smashing while backpedalling is hard. Lobs over a net player now win 52-58% (was 18-39%).
+- [x] Bug: untouched serves were never called "ACE!" (aces are now 3-6%).
+- [x] Tactic profiles still distinct (tactics.test) and career quick-sim pace unchanged (career-sim.test: it uses the stat sim).
 ### M17: Tactics School
 ### M18: Broadcast look: player art, forehand/backhand animations, TV scoreboard, sponsor boards, venues
 
