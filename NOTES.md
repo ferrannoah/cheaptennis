@@ -51,6 +51,15 @@ unclear, and writes one prompt that it can then use to edit the game.
 ## Done
 <!-- Claude moves notes here after acting on them, with the date. -->
 
+### 2026-11-09: play like Tennis Elbow 4, arcade version (M21)
+- Controls and feel one to one with Tennis Elbow 4 (graphics aside), from its documentation → **done**, from the manual in your Steam install, in its Arcade mode:
+  - Hold a strike button (X/Space, Z, both or C) before the ball arrives and keep holding: contact is automatic. While you hold, you auto-walk to the green spot and ←/→ sweeps the aim.
+  - ↑/↓ picks one of 10 strikes (normal, short, topspin, slice, drop, lob, acceleration, short acceleration, attack lob, plus the safe strike when nothing is held).
+  - Pressing earlier shrinks the aiming zone. Rising balls (the danger zone) and balls into the body cost accuracy.
+  - Only a few good accelerations per point: when they run out the racket smokes and the extra ones get wild.
+  - Serve: hold to toss, contact is automatic. Strong / Normal / Safe go in about 70 / 85 / 100%.
+  - Also: the volley jump, gestures after a point, and a court preview with the danger zone, green spots and live aiming zone. Options gain Arcade/Simulation, auto-positioning speed and the preview level. The COM uses the same system. The tutorial is rewritten.
+
 ### 2026-11-06: match the Free Tennis gameplay (M20)
 - Same dimensions as the Free Tennis recording: ball size, character size → **done**. The camera now frames the court like the recording, players are ≈1.4 court-metres tall with the bigger racket, and the ball was already the same size (0.2 m) and now has the same dark shadow. The crowd moved to the screen edges so it still shows.
 - Hitting should stop movement unless it's a slide → **done**. You're rooted from the start of the swing animation until the follow-through ends (~0.4 s; Free Tennis players stand still for ~0.35 s after hitting). Swing while running fast and you slide through the shot instead, with a slide pose and a skid trail.

@@ -90,7 +90,9 @@ it('rally pace matches the Free Tennis reference footage', () => {
   expect(pct(bSp, 0.5)).toBeGreaterThan(15.5);
   expect(pct(bSp, 0.5)).toBeLessThan(21);
   expect(pct(hitIv, 0.5)).toBeGreaterThan(0.9);
-  expect(pct(hitIv, 0.5)).toBeLessThan(1.15);
+  // (M21) the Elbow controls make players wait for the ball to stop rising (danger zone), so a shot comes
+  // back every ~1.2 s instead of the footage's 1.0 s
+  expect(pct(hitIv, 0.5)).toBeLessThan(1.25);
   expect(pct(depth, 0.5)).toBeLessThan(12.3);
   expect(pct(netZ, 0.5)).toBeGreaterThan(1.2);
   expect(pct(netZ, 0.5)).toBeLessThan(2.6);

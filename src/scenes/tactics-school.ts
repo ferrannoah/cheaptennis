@@ -162,7 +162,7 @@ export function makeLessonMatch(lesson: Lesson, surface: SurfaceId, back: () => 
         }
         break;
       case 'serve':
-        if (e.p === 0) st.cur = { hitX: p.x, hitY: p.y, shot: 'serve', good: e.grade === 'GOOD' || e.grade === 'PERFECT', k: m.practiceServes };
+        if (e.p === 0) st.cur = { hitX: p.x, hitY: p.y, shot: 'serve', good: true, k: m.practiceServes };
         break;
       case 'whiff':
         if (e.p === 0) miss();

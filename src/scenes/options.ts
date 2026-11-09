@@ -1,7 +1,7 @@
 import { game, W, H } from '../core/game';
 import { MenuScene, MenuEntry, cycle } from './menu-base';
 import { drawSetupScreen } from './setup-common';
-import { settings, saveSettings, resetBindings, Difficulty, Profile, ACTIONS, ACTION_LABEL, keyLabel, PAD_LABEL, Action } from '../core/settings';
+import { settings, saveSettings, resetBindings, Difficulty, Profile, ACTIONS, ACTION_LABEL, keyLabel, PAD_LABEL, Action, STRIKE_ACTIONS } from '../core/settings';
 import { audio } from '../core/audio';
 import { input } from '../core/input';
 import { TitleScene } from './title';
@@ -33,7 +33,21 @@ export class OptionsScene extends MenuScene {
       { id: 'music', label: 'Music volume', value: pct(settings.music), change: (d) => set(() => (settings.music = vol(settings.music, d)))() },
       { id: 'sfx', label: 'Effects volume', value: pct(settings.sfx), change: (d) => set(() => (settings.sfx = vol(settings.sfx, d)))() },
       { id: 'mute', label: 'Mute (M)', value: settings.muted ? 'ON' : 'OFF', change: () => audio.toggleMute() },
-      { id: 'hud', label: 'Training HUD', value: settings.trainingHud ? 'ON' : 'OFF', change: set(() => (settings.trainingHud = !settings.trainingHud)), hint: 'Shows predicted landing spot and the PERFECT/GOOD timing window' },
+      {
+        id: 'mode', label: 'Strike controls', value: settings.controlMode === 'arcade' ? 'ARCADE' : 'SIMULATION',
+        change: set(() => (settings.controlMode = settings.controlMode === 'arcade' ? 'sim' : 'arcade')),
+        hint: 'Arcade: half the danger-zone / off-centre penalties, the aiming zone closes twice as fast',
+      },
+      {
+        id: 'autopos', label: 'Auto-positioning', value: settings.autoPos.toUpperCase(),
+        change: (d) => set(() => (settings.autoPos = cycle(['slow', 'average', 'fast'] as const, settings.autoPos, d)))(),
+        hint: 'How fast you walk to the ball by yourself while a strike button is held',
+      },
+      {
+        id: 'preview', label: 'Court preview', value: { off: 'OFF', impact: 'IMPACT', danger: 'IMPACT + DANGER ZONE', all: 'ALL + AIMING' }[settings.preview],
+        change: (d) => set(() => (settings.preview = cycle(['off', 'impact', 'danger', 'all'] as const, settings.preview, d)))(),
+        hint: 'Landing marker, the danger zone with its green spots, and your live aiming zone',
+      },
       { id: 'difficulty', label: 'COM difficulty', value: settings.difficulty.toUpperCase(), change: (d) => set(() => (settings.difficulty = cycle(DIFFS, settings.difficulty, d)))() },
       { id: 'clen', label: 'Career match length', value: { short: 'First to 3 games', set: '6-game set', full: 'Best of 3 sets' }[settings.careerLength], change: (d) => set(() => (settings.careerLength = cycle(['short', 'set', 'full'] as const, settings.careerLength, d)))() },
       { id: 'bo5', label: 'Majors best of 5', value: settings.majorsBo5 ? 'ON' : 'OFF', change: set(() => (settings.majorsBo5 = !settings.majorsBo5)), hint: 'Only applies when career match length is "Best of 3 sets"' },
@@ -51,7 +65,7 @@ export class OptionsScene extends MenuScene {
     ctx.fillRect(0, 0, W, H);
     text(ctx, 'OPTIONS', W / 2, 34, { size: 30, align: 'center', outline: '#13284a', outlineWidth: 8 });
     const items = this.items();
-    const pw = 440, row = 24;
+    const pw = 460, row = 22;
     const ph = items.length * row + 24;
     const px = (W - pw) / 2, py = 60;
     panel(ctx, px, py, pw, ph);
@@ -68,7 +82,7 @@ export class RemapScene extends MenuScene {
     super();
   }
   actions(): Action[] {
-    return this.profile === 'pad' ? ['normal', 'topspin', 'slice', 'lob', 'drop'] : ACTIONS;
+    return this.profile === 'pad' ? STRIKE_ACTIONS : ACTIONS;
   }
   items(): MenuEntry[] {
     const its: MenuEntry[] = this.actions().map((a) => ({

@@ -14,7 +14,7 @@ test('Space skips the dead time and walk between points without tossing', async 
     expect(s.canSkip).toBe(true);
     if (n === 0) await shot(page, 'skip-hint');
     const pts = JSON.stringify([s.points, s.games]);
-    await press(page, 'normal', 1);
+    await press(page, 'b1', 1);
     s = await adv(page, 1);
     s = await page.evaluate(() => (window as any).__game.state());
     expect(s.skips).toBe(++skipped);

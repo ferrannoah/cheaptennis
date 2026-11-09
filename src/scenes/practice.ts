@@ -8,7 +8,8 @@ import { Controller } from '../core/input';
 import { MatchScene } from './match';
 import { TitleScene } from './title';
 import { SURF_IDS } from './exhibition';
-import { settings, keyLabel } from '../core/settings';
+import { settings, keyLabel, Action } from '../core/settings';
+import { STRIKES, StrikeId } from '../match/strike';
 import { ShotType } from '../data/types';
 import { PracticeFeed, Match } from '../match/match';
 import { panel, roundRect } from '../gfx/ui';
@@ -47,7 +48,7 @@ export class PracticeSetup extends MenuScene {
     game.goto(new TitleScene());
   }
   draw(ctx: CanvasRenderingContext2D): void {
-    drawSetupScreen(ctx, this.t, 'PRACTICE', this.items(), this.sel, 'Training HUD is always on in practice. Esc to leave.', this.surface);
+    drawSetupScreen(ctx, this.t, 'PRACTICE', this.items(), this.sel, 'The court preview is always on in practice. Esc to leave.', this.surface);
   }
 }
 
@@ -84,7 +85,7 @@ export function drawLanding(ctx: CanvasRenderingContext2D, m: Match): void {
   }
   ctx.restore();
   text(ctx, inside ? 'IN' : 'OUT', c.x, c.y - 12, { size: 10, align: 'center', color: inside ? '#9ef07a' : '#ff9a8a', outline: '#13284a' });
-  if (r.dead) text(ctx, `${keyLabel(settings.keys.solo.normal[0])}  next ball`, W - 14, H - 14, { size: 10, align: 'right', color: '#d6e4f7', outline: '#13284a', weight: 700 });
+  if (r.dead) text(ctx, `${keyLabel(settings.keys.solo.b1[0])}  next ball`, W - 14, H - 14, { size: 10, align: 'right', color: '#d6e4f7', outline: '#13284a', weight: 700 });
 }
 
 export function startPractice(feed: PracticeFeed, surface: SurfaceId): void {
@@ -116,24 +117,34 @@ interface TutState {
   pendingT: number;
 }
 
-function K(a: 'normal' | 'topspin' | 'slice' | 'lob' | 'drop' | 'left' | 'right' | 'up' | 'down'): string {
+function K(a: Action): string {
   return keyLabel(settings.keys.solo[a][0]);
+}
+
+/** a tutorial step that wants one hit of each listed strike */
+function eachStrike(st: TutState, e: Match['events'][number], ids: StrikeId[]): boolean {
+  if (e.t !== 'hit' || e.p !== 0 || e.grade === 'MISHIT') return false;
+  const i = ids.indexOf(e.strike);
+  if (i < 0 || st.lastX & (1 << i)) return false;
+  st.lastX |= 1 << i;
+  return true;
 }
 
 function steps(): Step[] {
   const feed = (type: ShotType | 'random', side: PracticeFeed['side'] = 'mix', speed = 0.85): PracticeFeed => ({ type, side, speed, interval: 75 });
-  const shotStep = (type: ShotType, key: string, title: string, body: string): Step => ({
-    title, body: `${body} Press ${key}.`, goal: 2, feed: feed('normal'),
-    check: (e) => e.t === 'hit' && e.p === 0 && e.shot === type && e.grade !== 'MISHIT',
-  });
+  const b1 = K('b1'), b2 = K('b2'), acc = K('acc');
   return [
     { title: 'Move', body: `Use the arrow keys (${K('left')} ${K('right')} ${K('up')} ${K('down')}) to run around your half of the court.`, goal: 1, feed: { ...feed('normal'), interval: 99999 }, manual: false },
     {
-      title: 'Timing', body: `Press ${K('normal')} as the ball arrives. Watch the arc meter beside you: swing when it reaches the gold notch. Hit 3 shots graded GOOD or PERFECT.`, goal: 3, feed: feed('normal', 'fh', 0.8),
-      check: (e) => e.t === 'hit' && e.p === 0 && (e.grade === 'GOOD' || e.grade === 'PERFECT'),
+      title: 'Hold to strike',
+      body: `Press and HOLD ${b1} (or Space) before the ball reaches you, and keep holding: you hit it by yourself. While you hold, you walk to the ball on your own (the green spot). The ring at your feet fills up: the earlier you press, the more accurate the shot. Hit 3 balls holding for at least half a second.`,
+      goal: 3, feed: feed('normal', 'fh', 0.8),
+      check: (e) => e.t === 'hit' && e.p === 0 && e.prep >= 0.45 && e.grade !== 'MISHIT',
     },
     {
-      title: 'Aim left and right', body: `Hold ${K('left')} or ${K('right')} while you hit to send the ball cross-court or down the line. Land one shot in each half (left and right).`, goal: 2, feed: feed('normal'),
+      title: 'Aim by sweeping',
+      body: `While holding ${b1}, push ${K('left')} or ${K('right')}: the aim (white circle on the other side) slides that way the longer you push, and drifts back to the middle when you let go. Too long and it goes wide! Land one shot in each half.`,
+      goal: 2, feed: feed('normal'),
       check: (e, m, st) => {
         if (e.t === 'hit' && e.p === 0) st.awaitBounce = true;
         if (e.t === 'bounce' && st.awaitBounce && e.y > 0 && e.y < HALF_LEN) {
@@ -148,35 +159,44 @@ function steps(): Step[] {
       },
     },
     {
-      title: 'Deep and short', body: `Hold ${K('up')} at contact to hit deep, ${K('down')} to hit short. Land one deep (past the service line) and one short (inside it).`, goal: 2, feed: feed('normal'),
-      check: (e, m, st) => {
-        if (e.t === 'hit' && e.p === 0) st.awaitBounce = true;
-        if (e.t === 'bounce' && st.awaitBounce && e.y > 0 && e.y < HALF_LEN) {
-          st.awaitBounce = false;
-          const side = e.y > SERVICE_Y + 1 ? 4 : e.y < SERVICE_Y ? 8 : 0;
-          if (side && !(st.lastY & side)) {
-            st.lastY |= side;
-            return true;
-          }
-        }
-        return false;
-      },
+      title: 'Danger zone',
+      body: 'After the bounce the ball is still rising: the red and orange band. Hit it there and you lose control or accuracy. Meet it on a green spot, past the danger, at the side of your body (not into it). Hit 3 clean balls from a green spot.',
+      goal: 3, feed: feed('normal', 'mix', 0.9),
+      check: (e) => e.t === 'hit' && e.p === 0 && e.danger === 'green' && e.centre === 'green' && e.grade !== 'SAFE',
     },
-    shotStep('topspin', K('topspin'), 'Topspin', 'Topspin clears the net high, dips, and kicks up after the bounce: a safe, heavy rally ball.'),
-    shotStep('slice', K('slice'), 'Slice', 'Slice stays low and skids: slower, great for defence and on grass.'),
-    shotStep('lob', K('lob'), 'Lob', 'The lob sails high over an opponent at the net.'),
-    shotStep('drop', K('drop'), 'Drop shot', 'The drop shot lands short and dies. Best when your opponent is far back.'),
     {
-      title: 'Serve', body: `Press ${K('normal')} to toss, then ${K('normal')} again at the very top of the toss (the gold notch on the toss meter). Hold ${K('left')}/${K('right')} to aim. Land 2 serves in the box.`, goal: 2,
+      title: `Strike 1 (${b1})`,
+      body: `${b1} alone is the normal rally ball. Hold ${K('up')} with it (toward the net) for a SHORT angled strike, or ${K('down')} for TOPSPIN. Hit one short strike and one topspin.`,
+      goal: 2, feed: feed('normal'),
+      check: (e, m, st) => eachStrike(st, e, ['short', 'topspin']),
+    },
+    {
+      title: `Strike 2 (${b2})`,
+      body: `${b2} alone is a SLICE. ${b2} + ${K('up')} is a DROP SHOT, ${b2} + ${K('down')} a defensive LOB. Hit one of each.`,
+      goal: 3, feed: feed('normal'),
+      check: (e, m, st) => eachStrike(st, e, ['slice', 'drop', 'lob']),
+    },
+    {
+      title: 'Acceleration',
+      body: `Hold ${b1} + ${b2} together (or ${acc}) for an ACCELERATION: a fast attacking ball, fastest at the top of the bounce. You only get a few good ones per point (the yellow ACC pips); after that they get wild and your racket smokes. Hit 2 accelerations.`,
+      goal: 2, feed: feed('normal', 'mix', 0.8),
+      check: (e) => e.t === 'hit' && e.p === 0 && STRIKES[e.strike].accel && e.grade !== 'MISHIT',
+    },
+    {
+      title: 'Serve',
+      body: `Press ${b1} to toss and keep HOLDING it: the serve goes off by itself at the top. ${K('left')}/${K('right')} sweeps the aim across the box while you hold. Land 2 serves in the box.`,
+      goal: 2,
       feed: { type: 'normal', side: 'mix', speed: 1, interval: 70, serve: true },
       check: (e) => e.t === 'call' && e.text === 'IN!',
     },
     {
-      title: 'Kick and slice serves', body: `Hold ${K('topspin')} while hitting for a high-bouncing KICK serve (safe second serve), or ${K('slice')} for a curving SLICE serve. Hit one of each.`, goal: 2,
+      title: 'Serve types',
+      body: `${b1} = NORMAL serve (in ~85%), ${b1} + ${b2} = STRONG (fast, in ~70%), ${b2} = SAFE (always in, slower). Hold ${K('up')} for slice, ${K('down')} for kick. Hit one STRONG and one SAFE serve.`,
+      goal: 2,
       feed: { type: 'normal', side: 'mix', speed: 1, interval: 70, serve: true },
       check: (e, m, st) => {
-        if (e.t === 'serve' && e.p === 0 && e.type !== 'flat') {
-          const bit = e.type === 'kick' ? 16 : 32;
+        if (e.t === 'serve' && e.p === 0 && e.force !== 'normal') {
+          const bit = e.force === 'strong' ? 16 : 32;
           if (!(st.lastX & bit)) {
             st.lastX |= bit;
             return true;
@@ -186,7 +206,9 @@ function steps(): Step[] {
       },
     },
     {
-      title: 'Stamina', body: 'Your stamina bar (bottom left) drains when you sprint, dive and play long rallies. When it turns red you slow down, your PERFECT window shrinks and your shots get wilder. It recovers between points and faster at changeovers. Press Space to finish the tutorial!', goal: 1,
+      title: 'Stamina and gestures',
+      body: `Sprinting, accelerations and long rallies drain your stamina (bottom left). Tired, you run slower and your aim zone grows. After a point, press ${K('gesture')} + an arrow for a gesture. Release the button just before a serve to rush the net sooner. Press Space to finish the tutorial!`,
+      goal: 1,
       feed: { ...feed('normal'), interval: 99999 }, manual: true,
     },
   ];

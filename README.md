@@ -1,6 +1,6 @@
 # Baseline (cheaptennis)
 
-A bright arcade tennis game for the browser. A fixed broadcast camera shows the whole court. On top of the arcade core it adds shot timing with feedback, five shot types, stamina, a bracket mode, local versus, and a career that climbs a fictional pro tour on real ATP-style ranking rules.
+A bright arcade tennis game for the browser. A fixed broadcast camera shows the whole court. Its controls and feel follow Tennis Elbow 4's Arcade mode: hold-to-strike shots, a danger zone, aim sweeping, ten strikes and limited accelerations. Around that it adds stamina, a bracket mode, local versus, and a career that climbs a fictional pro tour on real ATP-style ranking rules.
 
 Everything is drawn and synthesised in code: there are no image or audio files. All names, events and Majors are fictional. School project.
 
@@ -8,22 +8,22 @@ Everything is drawn and synthesised in code: there are no image or audio files. 
 
 ## Controls
 
+The controls work like Tennis Elbow 4's **Arcade** mode: you hold a strike button through the shot instead of timing a press.
+
 | Action | Keyboard (single player) | Gamepad |
 |---|---|---|
-| Move | Arrow keys | Left stick / D-pad |
-| Aim (hold at contact) | ←/→ angle, ↑ deep, ↓ short (point the arrow where you want the ball to go) | Stick |
-| Normal shot | Space | A |
-| Topspin | Z | X |
-| Slice | X | B |
-| Lob | C | Y |
-| Drop shot | V | RB |
-| Serve | Space to toss, Space again at the top of the toss. Hold Z for a kick serve or X for a slice serve. ←/→ aims. | A (hold X/B) |
+| Move (no button held) | Arrow keys | Left stick / D-pad |
+| Strike 1: normal / ↑ short / ↓ topspin | **hold** X (or Space) | A |
+| Strike 2: slice / ↑ drop / ↓ lob | **hold** Z | X |
+| Acceleration / ↑ short accel. / ↓ attack lob | **hold** X + Z, or C | B |
+| Serve | **hold** X (normal), Z (safe) or X + Z (strong) through the toss; ↑ slice, ↓ kick; ←/→ aims | A / X / B |
+| Gesture after a point | V + an arrow | Y |
 | Pause | Esc / P | Start |
 | Mute | M | |
 
-**Versus (one keyboard):** P1 uses WASD to move, with F/G/H/J/K for normal/topspin/slice/lob/drop. P2 uses the arrows to move, with Numpad 1-5 (or 1-5 on the number row). Two gamepads also work. All keys can be rebound in **Options**.
+**How to hit:** press and hold a strike button *before* the ball reaches you, and keep holding: you hit it automatically when it arrives. While you hold, your player walks to the ball on their own (to the green spot), ←/→ sweeps your aim (the longer you push, the further it goes), and ↑/↓ (toward / away from the net) picks the strike. The earlier you press, the more accurate and deeper the shot: the ring at your feet fills up and the aiming zone on the other side shrinks. Don't hit the ball while it is still rising in the red/orange danger zone, and keep it beside your body, not into it. You only get a few good accelerations per point (the ACC pips). With no button held you play a weak safe shot.
 
-**Timing:** press the shot key as the ball arrives. The arc meter next to your player fills up; swing when it reaches the gold notch. Every swing is graded PERFECT / GOOD / EARLY / LATE / MISHIT, and a popup tells you why.
+**Versus (one keyboard):** P1 uses WASD to move, with F / G / R / T for strike 1 / strike 2 / acceleration / gesture. P2 uses the arrows, with Numpad 1-4 (or 1-4 on the number row). Two gamepads also work. All keys can be rebound in **Options**, which also has Arcade/Simulation controls, auto-positioning speed and the court preview.
 
 ## Modes
 
@@ -87,7 +87,7 @@ git push
 ```
 src/core      loop, input, audio synth + tracker, settings, save, rng
 src/gfx       camera projection, court/stadium, player renderer, HUD, trophies
-src/match     3D ball physics, shot model + timing, players, AI, scoring, match flow
+src/match     3D ball physics, shot model + Elbow strike rules (strike.ts), players, AI, scoring, match flow
 src/sim       stat-based match simulator, brackets
 src/career    rankings, entry rules, weekly field simulation, progression, save
 src/data      tour.ts (all tiers, points, cutoffs, calendar), surfaces, archetypes, tuning, music

@@ -127,6 +127,24 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` verified
 - [x] **Stroke commitment + slide:** no steering from the swing animation to the end of the follow-through (and after the serve); a running swing becomes a slide with its own pose and skid trail. *(stroke-lock.test: no acceleration or turning while locked, planted strokes stop within 10 frames, slides happen; the lock window matches the swing)*
 - [x] **Reference pace:** faster players, +8% groundstroke pace, and the COM plays around the baseline. A shot every 1.08 s versus 1.00 s in the footage. *(reference-pace.test asserts the footage targets; balance.test still green; timing.spec MISHIT fixed with a speed-scaled late-contact tolerance)*
 
+## "Elbow" controls (user request, 2026-11-08)
+Goal: the controls and feel of Tennis Elbow 4 in **Arcade** mode, taken from its manual (Steam install, `Doc/En_Documentation.html`); our own art, names and code.
+### M21: Hold-to-strike controls and the shot model behind them
+- [x] **Input:** two strike buttons (B1, B2), with both together or a dedicated key giving an acceleration, plus a gesture key. Defaults: solo X/Space, Z, C, V; versus P1 F, G, R, T; versus P2 Num1-4; pad A, X, B, Y. *(Options remap lists the new actions)*
+- [x] **Hold to strike:** hold a strike button before the ball arrives and keep it held; contact is automatic. Holding a button stops manual running: you **auto-position** to the ideal spot (Slow/Average/Fast, default Fast), and left/right **sweeps the aim**. The longer you push, the further it goes, faster near the net (2-3x slower behind the baseline), and it drifts back to the centre when released. Nothing held at contact = a weak **safe strike**. *(strike.test: aim sweep rates, safe strike, auto-pos speed)*
+- [x] **Strike menu** (held at contact): B1 Normal / ↑ Short / ↓ Topspin; B2 Slice / ↑ Drop / ↓ Defensive lob; B1+B2 Acceleration / ↑ Short acceleration / ↓ Attack lob. ↑ means toward the net. *(strike.test: all 10 strikes reachable)*
+- [x] **Preparation = accuracy:** the aiming zone shrinks the earlier you press. Arcade shrinks it twice as fast as Simulation, and the COM uses Simulation, as in the manual. Earlier prep also hits deeper (short strikes shorter); off-centre or out of position does the opposite. Hitting from closer to the baseline goes deeper. *(strike.test: zone radius vs prep, depth rules)*
+- [x] **Danger zone + centring:** contact on a rising ball (red/orange zone after the bounce) or off the racket's sweet spot (into the body, stretched) costs accuracy and power; red can lose control (net or long). Arcade halves these penalties. *(strike.test)*
+- [x] **Accelerations:** limited good accelerations per point (1-5 from endurance, ± per archetype); the extra ones get wilder and slower, and the racket smokes from the last good one. Max pace at the top of the bounce, a bonus at shoulder height, a penalty for head-high balls. *(strike.test: quota + pace rules)*
+- [x] **Serve:** press and hold to toss; contact is automatic at the top. B1 Normal, B2 Safe, both Strong; ↑ slice, ↓ kick; ←/→ sweeps the aim. Success ≈70% / 85% / 100% for Strong / Normal / Safe; second-serve stress (−10% / −4% and wider aim); speed from serve skill (≈102-204 km/h). Releasing just before contact lets you run in sooner. *(serve.test: measured success rates and speeds)*
+- [x] **Volley jump:** at the net, holding a strike button lets you dive for a ball out of normal reach. *(strike.test)*
+- [x] **Preview HUD (Off / Impact / +Danger zone / All):** the impact marker, the danger zone band with the two green spots, the live aiming spot and zone, acceleration pips, and the centring icon after an error. The old timing arc and toss meter are removed. *(screenshots reviewed)*
+- [x] **Options:** Controls Arcade/Simulation (default Arcade), Auto-positioning Slow/Average/Fast (default Fast), Preview (default All).
+- [x] **COM on the same system:** the COM runs, then holds the button early, auto-positions and aims through the same code (Simulation accuracy). Balance targets retuned and green. *(balance/tactics/reference-pace tests)*
+- [x] **Gestures:** after a point, gesture key + direction (jump, fist, raging fist, apology / applaud, forehead slap, "crazy", racket throw).
+- [x] **Tutorial rewritten** for the new controls (hold, aim sweep, green spots, both strike menus, acceleration, serve types); title, versus and Tactics School hints updated. *(practice e2e: every tutorial step completable by the autopilot)*
+- [x] **Browser tests:** the autopilot holds buttons like a player; timing.spec becomes strike.spec; all e2e green; deployed and checked live.
+
 ---
 
 ## Definition of Done (verify each item)
@@ -134,7 +152,7 @@ Evidence: `npm test` (Vitest, 45 tests) and `npx playwright test` (Playwright vi
 - [x] Title screen, stat comparison card and full-court match view match the style described in the GDD. *(boot.spec: title/statcard/match-{grass,clay,hard} screenshots reviewed)*
 - [x] Classic Arrow + Space controls feel instant. A first-to-3-games exhibition plays start to finish. *(exhibition.spec: movement starts within 2 frames; title → setup → stat card → match → GAME, SET AND MATCH → result, driven through virtual key presses)*
 - [x] All 5 shot types + 3 serve types work and play visibly differently on all 3 surfaces. *(shots-surfaces.test: net clearance, apex, post-bounce speed, bounce gap, serve speed/kick per type and surface)*
-- [x] Every swing shows a timing grade with a reason, and PERFECT feels great. *(timing.spec: scripted presses produce PERFECT/GOOD/EARLY/LATE/MISHIT with reason popups; PERFECT = hitstop, trail, sparks, impact ring, shake, sting)*
+- [x] Every strike shows a grade with a reason, and PERFECT feels great. *(M21 strike.spec: an early hold grades GOOD/PERFECT, a last-moment hold RUSHED, no button SAFE, accelerations named; PERFECT = hitstop, trail, sparks, impact ring, shake, sting)*
 - [x] Stamina drains/recovers and visibly affects play. *(modes.spec: drains over a rally, lower top speed and timing window at 12%, red pulsing bar + TIRED label, recovers between points)*
 - [x] Tournament mode: 8/16/32 bracket screen and trophy screen. *(modes.spec: bracket-8/16/32 + trophy screenshots)*
 - [x] Local 2-player versus with keyboard split and with two gamepads. *(modes.spec: WASD + arrows both move and rally; two mocked gamepads move and serve)*
@@ -157,3 +175,4 @@ Evidence: `npm test` (Vitest, 45 tests) and `npx playwright test` (Playwright vi
 - 2026-11-06: M16 speed balance (measured before/after), M17 Tactics School, M18 broadcast look. Playtest round 1 notes all handled; still needs a hand-played check of the new feel.
 - 2026-11-06: M19 playtest round 2 (no ads, hidden COM plan, H fatigue panel, racket depth, crowd by event size, skip clears UI).
 - 2026-11-06: M20 matched to the user's Free Tennis recording (camera framing, sizes, pace) and added stroke commitment with slide strokes. 76 unit tests + 28 browser tests green.
+- 2026-11-09: M21 "Elbow" controls from the Tennis Elbow 4 manual: hold-to-strike with auto-positioning and aim sweep, the 10-strike menu, preparation-based aiming zone, danger zone with green spots, centring, accelerations per point, the Strong/Normal/Safe serve, volley jump, gestures, the court preview, the COM on the same system, and a rewritten tutorial. 94 unit tests + 28 browser tests green.

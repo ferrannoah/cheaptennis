@@ -15,7 +15,7 @@ Everything serves the swing. The moment of contact must feel crisp, legible and 
 ### Core loop at 3 scales
 | Scale | Loop |
 |---|---|
-| **5 seconds** | Read the incoming ball → move to it → hold an aim direction → press a shot key at the right moment → see the timing grade + reason → recover to position. |
+| **5 seconds** | Read the incoming ball → run to it → press and hold a strike button early (auto-positioning to the green spot) → sweep the aim and pick the strike → automatic contact → grade + reason → recover to position. |
 | **1 minute** | Points and games: serve or return, build a rally, manage stamina across a long point, win the game, short changeover recovery. |
 | **10 minutes** | A match (default first to 3 games), then: the next bracket round, the career week's result, ranking movement, XP and skill points to spend. |
 
@@ -86,31 +86,44 @@ A fixed long-lens broadcast camera behind the near baseline. A real pinhole proj
   The point box flashes when the score changes. On big points a tab slides out to the right: **BREAK POINT / SET POINT (GAME POINT in short formats) / MATCH POINT / TIEBREAK** (`Score.pressureLabel`).
 - **Stamina:** two small bars (far player under the scoreboard, near player bottom-left), green → yellow → **red** when low, pulsing when critical.
 - **"SPACE skip"** hint bottom-right whenever the time between points can be skipped; skipping also clears the point's popups, umpire call and banners.
-- **Fatigue details (H, M19):** a chip by each human's stamina bar; H shows/hides a panel listing what tiredness is costing right now: top speed, acceleration, timing window, shot accuracy, shot power, serve speed and serve accuracy, in %. The numbers come from `src/match/fatigue.ts`, the same functions the physics uses. The setting is saved.
+- **Fatigue details (H, M19):** a chip by each human's stamina bar; H shows/hides a panel listing what tiredness is costing right now: top speed, acceleration, aim-zone closing speed, shot accuracy, shot power, serve speed and serve accuracy, in %. The numbers come from `src/match/fatigue.ts`, the same functions the physics uses. The setting is saved.
 - **Timing popup:** small arc meter by the hitting player + a text popup with the grade and reason.
 - **Umpire calls:** centred pop-up text ("OUT!", "FAULT!", "LET", "DEUCE", "ADVANTAGE YOU", "GAME", "SET", "MATCH").
-- Optional **Training HUD:** predicted landing spot marker and the timing window band on the arc meter.
+- **Court preview** (Options, default All): impact marker, danger zone + green spots, live aiming zone, preparation ring; ACC pips next to the stamina bar; centring icon after an error (M21).
 
 ---
 
 ## 2. Match gameplay
 
-### 2.1 Controls (defaults, all rebindable in Options)
+### 2.1 Controls (M21 "Elbow" controls; defaults, all rebindable in Options)
+The controls and feel follow **Tennis Elbow 4 in Arcade mode**, taken from its manual (`Doc/En_Documentation.html` in the user's Steam install). The art, names and code are our own.
+
 | Action | Keyboard (single player) | Gamepad |
 |---|---|---|
-| Move | Arrow keys | Left stick / D-pad |
-| Aim (held at contact) | Arrow keys: ←/→ angle, ↑ deep, ↓ short | Stick / D-pad |
-| Normal shot | Space | A |
-| Topspin | Z | X |
-| Slice | X | B |
-| Lob | C | Y |
-| Drop shot | V | RB |
-| Serve | Space = toss, Space = hit; ←/→ direction; hold Z = kick serve, hold X = slice serve | A toss/hit; hold X/B |
+| Move (no button held) | Arrow keys | Left stick / D-pad |
+| Strike 1 (hold) | X or Space | A |
+| Strike 2 (hold) | Z | X |
+| Acceleration (= Strike 1 + 2) | X + Z, or C | B (or A + X) |
+| Gesture (after a point, + a direction) | V | Y |
 | Pause | Esc / P | Start |
 
-**Versus keyboard split:** P1 = WASD move/aim, F normal, G topspin, H slice, J lob, K drop. P2 = arrows move/aim, Numpad 1/2/3/4/5 (or digit row 1/2/3/4/5) = normal/topspin/slice/lob/drop. Two gamepads: pad 0 = P1, pad 1 = P2.
+**Versus keyboard split:** P1 = WASD, F strike 1, G strike 2, R acceleration, T gesture. P2 = arrows, Numpad (or digit row) 1/2/3/4 = strike 1 / strike 2 / acceleration / gesture. Two gamepads: pad 0 = P1, pad 1 = P2. Saves from the old 5-shot-button scheme keep only their movement keys.
 
-Auto-facing: the player automatically uses forehand or backhand depending on which side of the body the ball arrives on (handedness-aware). Movement uses acceleration/deceleration curves tuned to feel instant (reach full speed in ~0.12 s, stop in ~0.08 s), with a **split step** auto-triggered as the opponent strikes.
+**Hold to strike.** Press a strike button *before* the ball reaches you and keep it held: contact is automatic when the ball arrives. While a button is held:
+- you don't run with the arrows; **auto-positioning** walks you toward the ideal spot (Options: Slow 1.5 / Average 2.3 / Fast 3.1 m/s, default Fast as the manual recommends for new players);
+- **←/→ sweeps the aim:** the longer you push, the further it goes, and it drifts back to the centre when released. It sweeps fastest at the net (≈0.4 s centre to line) and 2-3x slower a few metres behind the baseline. Past the line it goes wide. No direction = the centre of the other side;
+- **↑/↓ picks the strike** (↑ = toward the net, ↓ = away from it, for either end of the court).
+
+Nothing held at contact = a weak **safe strike**, which only happens for balls that have bounced: a ball in the air is left alone unless a button is held. At the net, holding a button lets you **jump** for a volley out of normal reach.
+
+| Held at contact | neutral | + ↑ (toward the net) | + ↓ (away) |
+|---|---|---|---|
+| Strike 1 | Normal | Short strike (angled) | Topspin |
+| Strike 2 | Slice | Drop shot | Defensive lob |
+| Strike 1 + 2 | Acceleration | Short acceleration | Attack lob |
+| nothing | Safe strike | | |
+
+Auto-facing: the player automatically uses forehand or backhand depending on which side of the body the ball arrives on (handedness-aware). A **split step** is auto-triggered as the opponent strikes.
 
 ### 2.2 Ball physics (true 3D)
 - State: position `(x, y, z)` metres, velocity, and **spin** (scalar: + topspin, − backspin; and a small sidespin term for slice serves).
@@ -128,57 +141,46 @@ Auto-facing: the player automatically uses forehand or backhand depending on whi
 
 Spin multipliers per surface amplify the topspin kick on clay and the slice skid on grass. All values live in `src/data/surfaces.ts`.
 
-### 2.4 The shot model
-Shots are **target-driven**, then perturbed by error, so they're predictable for the player and fair for the AI:
-1. **Target:** start from a base depth/width for the shot type; the held aim direction shifts it (←/→ = cross/down-the-line angle up to the sidelines, ↑ = deep toward the baseline, ↓ = short toward the service line). No aim = a safe central-deep target.
-2. **Trajectory solve:** given the target and a desired net clearance/apex per shot type, solve for the launch velocity (iterative ballistic solve that includes drag and spin dip, done once at contact).
-3. **Modifiers:** pace from the stat (forehand/backhand/volley/touch) × timing grade × stamina × footwork (standing vs. running) × contact height (ideal waist height, penalties for low/high).
-4. **Error cone:** angular and depth noise scaled by timing grade, stats, stamina and being off-balance. PERFECT tightens it sharply.
+### 2.4 The shot model (M21)
+Shots are **target-driven**, then scattered inside an **aiming zone**, so they're predictable for the player and fair for the COM (`planStrike` / `makeShot` in `src/match/shots.ts`; the HUD preview draws `planStrike` exactly):
+1. **Target:** each strike has a base depth; the aim sweep sets the side (±3.6 m at full sweep, ±3.9 m for short strikes). **Depth rules:** earlier preparation goes deeper (short strikes and drops shorter); off-centre, rising-ball or on-the-run contact does the opposite; hitting from closer to the baseline goes deeper; better consistency (the stat) goes deeper. Drops and lobs on a fast incoming ball float long; a lob on the run follows the run.
+2. **Trajectory solve:** solve the launch velocity for the target and a net clearance per strike, then re-aim by the landing error measured with the game's own 60 Hz physics (`solveLanded`).
+3. **Aiming zone** (the radius that holds ~60% of landings): `Rmin + (R0 − Rmin)·e^(−prep/τ)`, with R0 = 2.4 m, Rmin = 0.3-0.8 m by skill, τ = 0.2 s (Arcade) or 0.4 s (Simulation: Arcade closes it twice as fast, as in the manual). Mental and tiredness change τ. It is multiplied by running, stretching, low/high contact, tiredness, backpedalling, the danger zone, off-centre contact, accelerations (and more for each one past the quota), and the COM's risk level. The landing is drawn from a 2D normal with σ = R / 1.354, plus a little height scatter, so wide zones also put balls into the net.
+4. **Pace:** per-strike base × stat × fatigue × preparation (+8% fully prepared) × danger-zone and centring losses. **Accelerations** are ~24% faster, fastest at the top of the bounce, slower on head-high balls, with a **shoulder-height bonus** by style.
+5. **Losing control:** contact in the red danger zone, or a ball into the body / at full stretch, can send the ball into the net or long (MISHIT). Arcade halves the danger and centring penalties.
 
-| Shot | Key | Flight | Bounce | Use |
-|---|---|---|---|---|
-| **Normal** | Space | medium arc, medium pace | normal | default rally ball |
-| **Topspin** | Z | higher over the net, dips hard | **high, kicks forward** | safe margin, push opponents back |
-| **Slice** | X | low and slower, floats slightly | **low skid**, slows | defence, approach shots, change of pace |
-| **Lob** | C | very high arc | high | over a net-rusher; weak if short |
-| **Drop shot** | V | soft, just over the net | **dies** (strong backspin, low second bounce) | wrong-foot a deep opponent; risky from the baseline |
+| Strike | Flight | Bounce | Use |
+|---|---|---|---|
+| **Normal** | medium arc, medium pace | normal | default rally ball |
+| **Short strike** | shorter, more topspin, wider angle | kicks | pull the opponent off the court |
+| **Topspin** | higher over the net, dips hard | **high, kicks forward** | safe margin, push opponents back |
+| **Slice** | low and slower, floats slightly | **low skid**, slows | defence, approach shots, change of pace |
+| **Drop shot** | soft, just over the net | **dies** | wrong-foot a deep opponent; risky from the baseline |
+| **Defensive lob** | very high arc | high | over a net-rusher, or to buy time |
+| **Acceleration** | flat and fast | fast | attack (limited per point) |
+| **Short acceleration** | fast and angled | fast | angled winner |
+| **Attack lob** | lower topspin lob | kicks away | lob a net-rusher you can't pass (uses an acceleration) |
+| **Safe strike** | slow, central, high margin | normal | what you get with no button held |
 
-**Volleys** happen automatically when contact is made before the bounce near the net; **overheads** when contact is above ~2.3 m. Volley quality uses the Volley stat; drop/lob use Touch.
+**Volleys** happen when contact is made before the bounce; **overheads** when contact is above ~2.1 m. Volley quality uses the Volley stat; drop/lob use Touch.
 
-### 2.5 Shot timing + feedback (key feature)
-- **Ideal contact moment** = the frame the ball reaches the player's contact zone (crossing their hitting plane at reach distance). The swing has a fixed wind-up (`W ≈ 8 frames`), so the ideal press is `W` frames before arrival.
-- **offset** = (frames from press to arrival) − W. Positive = early, negative = late.
+### 2.5 Preparation, danger zone, centring (key feature)
+- **Preparation:** time from the press to contact. The **ring at the player's feet** fills as the zone closes (blue → green → gold).
+- **Danger zone:** right after the bounce the ball is still rising. `danger = (vz / vz just after the bounce) × pace weight`; the weight is small for rally balls (~20 m/s after the bounce gives at most orange) and full for accelerations (25+ m/s: a long red zone). Red > 0.55, orange > 0.22. The court shows the band along the ball's path and the **two green spots** (forehand and backhand side) where contact comes at the top of the bounce at a comfortable height. Auto-positioning walks to the nearer one.
+- **Centring:** the ball should pass at the sweet spot beside the body (0.82 m for 1-handed strokes, 0.72 m for 2-handed). Into the body or at full stretch is orange/red. After an error the **centring icon** (green / orange / red) shows how the missed ball was struck.
+- **Accelerations:** 1-5 good ones per point from Endurance (0-24: 1 ... 100: 5) plus the style bonus (Aggressive +3, Big Server / Counterpuncher +2, All-Court / Clay +1, Grinder −1). The ACC pips show what is left; from the last good one on, the racket smokes and every extra acceleration is slower and wilder.
+- **Grades** (popup + sound): PERFECT (prepared, set, green spot: hitstop, sting, trail), GOOD, RUSHED (pressed too late), RISING BALL, OFF-CENTRE, SAFE (nothing held), MISHIT (lost control). The popup also names the strike and the main reason.
+- **Preview option:** Off / Impact / + Danger zone / All + aiming (default All). The aiming spot and zone are shown live while a button is held, assuming contact at the auto-positioning spot.
+- **Stroke commitment** (M20) is unchanged: no steering from the swing animation to the end of the follow-through, and a running swing becomes a slide.
 
-| Grade | offset window (frames, base) | Effect |
-|---|---|---|
-| **PERFECT** | within ±2.5 | +18% pace, aim cone ×0.35, 4-frame hitstop, sound sting, ball trail, crowd "ooh" on winners |
-| **Good** | within ±6 | normal |
-| **Early** | +6 to +13 | ball floats: higher arc, depth error toward long |
-| **Late** | −6 to −11 | ball pulled wide toward the far sideline (side depends on forehand/backhand) |
-| **Mishit** | +13 to +20 or −11 to −15 | weak, wobbly ball (low pace, random spin, big error) |
-| Whiff | beyond that, or out of reach | no contact; the swing recovers after 0.3 s and you may swing again |
-
-- **Window scaling:** the PERFECT/Good windows grow with Mental (and the Clutch badge on big points) and shrink with low stamina and with running at contact.
-- **Timing meter:** a small arc beside the hitting player fills as the ball approaches; a white tick marks where the press landed; the Training HUD also shows the PERFECT band.
-- **Popup with the main reason**, chosen by whichever factor contributed most error:
-  - `PERFECT: +power +accuracy`
-  - `GOOD`
-  - `EARLY: rushed, floated long`
-  - `LATE: ball pulled wide`
-  - `MISHIT: framed it`
-  - `Off-balance: you were still running`
-  - `Stretched: reached too far`
-  - `Too low: ball dropped below the knees` / `Jammed: ball too close`
-  - `Tired: timing window shrinking`
-- **Footwork:** standing (speed < 25% at contact) vs. running; running at contact adds error unless Footwork is high.
-
-### 2.6 Serve
-- Positioned at the correct side of the centre mark for the point (deuce/ad). ←/→ before the toss shifts position slightly along the baseline.
-- **Space** tosses (the ball rises to ~2.9 m above the court and falls back); **Space** again strikes. Striking at the top of the toss (±4 frames) = full power and accuracy; earlier/later loses both. The toss can be let drop to re-toss (no penalty, once; a second drop is a fault? → No: re-toss allowed, as in real tennis).
-- Direction: hold ← / → at the strike = wide / T; neutral = body.
-- **Flat** (default): fastest, lowest margin. **Kick** (hold Z): high net clearance, high kicking bounce, safest second serve. **Slice** (hold X): curves wide, skids low on grass.
-- **Fault** when it lands outside the service box or hits the net; **double fault**; **LET** when it clips the net cord and lands in (replay the serve).
-- First vs. second serve: AI and the timing window are more forgiving on second serves only in the sense that kick serves have a wider safe margin.
+### 2.6 Serve (M21)
+- Positioned at the correct side of the centre mark (deuce/ad). ←/→ before the toss shifts position along the baseline.
+- **Press a strike button to toss, and keep holding:** contact is automatic at the top of the toss. What is held at contact picks the serve: **Strike 1 = Normal, Strike 2 = Safe, both = Strong**; ↑ = slice, ↓ = kick (topspin). ←/→ sweeps the aim across the box during the toss; past the box edge it goes out.
+- **Success** (from the manual, at equal power/consistency): Strong ≈70%, Normal ≈85%, Safe 100%. Second-serve stress: Strong −10% (and as tiring as an acceleration), Normal −4%, with wider aim zones. Faults go long, wide or into the net.
+- **Speed** from the Serve stat: ≈102 km/h at 0 up to ≈204 km/h at 100 (Strong); Normal ×0.86, Safe ×0.72; slice ×0.93, kick ×0.84; Ace Machine +4%.
+- **Release trick:** let go of the button just before contact and the serve still goes (with what was held last), and you are free to run in at once (no post-serve lock).
+- **Return:** holding a strike button before the serve keeps you still; auto-positioning starts the moment the serve is struck.
+- **Fault**, **double fault** and **LET** as before.
 
 ### 2.7 Stamina
 - 0–100 per player. **Drain:** running (proportional to speed), each shot (more for power/PERFECT-charged and lobs from deep), dives/stretches (big), long rallies (an extra drain per shot after 8 shots). Endurance stat scales all drains.
@@ -255,6 +257,8 @@ The user asked for the same dimensions and speeds as the Free Tennis gameplay th
 - **Speed retune:** top speed 5.0 + 2.0 × footwork/99 m/s (6.45 at footwork 72), acceleration 24. Groundstroke pace +8% (normal 27.3, topspin 24.9, slice 21.1). The COM now takes the ball around the baseline: it recovers 1.8 m closer than its archetype depth and pays a cost for contact more than 0.5 m behind the baseline. A late swing can still frame a ball that passed the contact plane up to 0.1 s ago, so MISHIT stays reachable at the faster pace.
 - Balance after M20 (pooled, `balance.test.ts`): rallies 5.6-7.0 shots, corners won outright 14-18%, drops vs a baseline player 31-38%, lobs vs a net player 44-53%.
 
+- **M21 note:** with the Elbow controls players wait for the ball to stop rising (danger zone) and stand on the baseline, so a shot comes back every ~1.18 s instead of 1.08 s. reference-pace.test now allows up to 1.25 s; the other footage targets still hold.
+
 ### 2.10 Umpire & crowd
 Text calls ("OUT!", "FAULT!", "DOUBLE FAULT", "LET", "DEUCE", "ADVANTAGE …", "GAME …", "SET …", "GAME, SET AND MATCH") with synth stings; crowd applause scaled by rally length and shot quality; "ooh" on near misses and PERFECT winners; hush during serves.
 
@@ -323,7 +327,7 @@ Two humans, same screen (P1 near, P2 far). Keyboard split (see §2.1) and/or two
 
 #### Phase 2: archetypes + progression
 - At creation pick **Primary + Secondary archetypes**: Big Server, Baseline Grinder, Aggressive Baseliner, Serve-and-Volleyer, Counterpuncher, All-Court Artist, Clay Specialist.
-- **Stats (0–99):** core **Forehand, Backhand, Serve, Footwork** (shown as 1–10 bars on the match card: `ceil(stat/10)`), plus **Volley, Touch** (lob/drop), **Spin, Return, Endurance** (stamina), **Mental** (clutch timing window). **OVR** = weighted average.
+- **Stats (0–99):** core **Forehand, Backhand, Serve, Footwork** (shown as 1–10 bars on the match card: `ceil(stat/10)`), plus **Volley, Touch** (lob/drop), **Spin, Return, Endurance** (stamina), **Mental** (how fast the aiming zone closes). **OVR** = weighted average.
 - **Caps:** each archetype defines a cap profile; the player's cap for a stat = `max(primaryCap, secondaryCap − 8)`, floored at 55. Profiles are designed so no combination reaches 90+ in everything (e.g. Big Server caps Serve 99 / Footwork 72; Counterpuncher caps Footwork 97 / Serve 70).
 - **XP:** from matches (base + win bonus, × tier multiplier, + per PERFECT shot) and short **training drills** (Rest/Train week: pick a drill, either quick-sim for a small fixed gain or play a 60-second practice-mode drill for a score-based gain). XP converts to **skill points** (1 SP per 100 XP); each stat point costs 1 SP below 60, 2 SP below 75, 3 SP above.
 - **Build screen:** each stat as a bar showing current value vs. cap (ghost bar), +/− to spend points, OVR preview.
@@ -331,7 +335,7 @@ Two humans, same screen (P1 near, P2 far). Keyboard split (see §2.1) and/or two
   - **Ace Machine** (serve ≥ 75 and 50 career aces): +4% serve pace, slightly wider ace angle.
   - **Wall** (footwork ≥ 75, win 10 rallies of 12+ shots): +8% reach on defensive stretches.
   - **Net Magnet** (volley ≥ 70): +10% volley reach and volley error ×0.8.
-  - **Clutch** (mental ≥ 70, save 20 break points): PERFECT window +1 frame on break/set/match points.
+  - **Clutch** (mental ≥ 70, save 20 break points): aiming zone ×0.9 on break/set/match points and +2% second-serve success (M21).
   - **Iron Lungs** (endurance ≥ 75): stamina drain ×0.85.
   - **Dirtballer** (win a clay title): clay footing penalty removed, +topspin kick.
   Each badge shows a small icon on the match card and a brief flash when it triggers.
@@ -339,7 +343,7 @@ Two humans, same screen (P1 near, P2 far). Keyboard split (see §2.1) and/or two
 - **Career page:** titles (by tier), W/L overall and by surface, career-high rank (and week), prize-style trophy cabinet of procedurally drawn trophies per title, Major results grid.
 
 ### 3.5 Practice
-- **Ball machine:** choose feed type (normal / topspin / slice / lob / random), side, speed; free hitting with the Training HUD on by default; streak counter of PERFECT hits.
+- **Ball machine:** choose feed type (normal / topspin / slice / lob / random), side, speed; free hitting with the court preview always on; streak counter of PERFECT hits.
 - **Tutorial** (step list with on-screen prompts and success checks): moving → timing (hit 5 GOOD+) → aiming (hit targets left/right/deep/short) → each shot type (topspin, slice, lob, drop) → serve (flat, kick, slice into targets) → stamina explainer. Shows the current key bindings. Each shot plays out (landing ring, IN/OUT) before the next ball, and a step finished by a hit waits for that ball to land.
 
 ### 3.5b Tactics School (playtest round 1, M17)
@@ -370,7 +374,7 @@ Sources for the tactics (general coaching consensus):
 - [Tennishead: serve plus one](https://tennishead.net/?p=192827)
 
 ### 3.6 Options
-Control remapping (P1 / P2 / per action, keyboard + gamepad button), master / music / SFX volume, mute (also **M** anywhere), Training HUD toggle, COM difficulty, career match length (short "first to 3 games" / full sets; Majors best-of-5 toggle), reduced screen shake, show FPS. Persisted in localStorage.
+Control remapping (P1 / P2 / per action, keyboard + gamepad button), master / music / SFX volume, mute (also **M** anywhere), strike controls Arcade/Simulation, auto-positioning Slow/Average/Fast, court preview Off/Impact/Danger/All, COM difficulty, career match length (short "first to 3 games" / full sets; Majors best-of-5 toggle), reduced screen shake, show FPS. Persisted in localStorage.
 
 ---
 

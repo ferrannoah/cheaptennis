@@ -12,7 +12,7 @@ export function moveFatigue(f: number): number {
   return f < low() ? 0.8 + 0.5 * f : 1;
 }
 
-/** multiplier on the timing windows (PERFECT / GOOD), relative to fresh */
+/** multiplier on how fast the aiming zone closes while a strike is prepared (M21), relative to fresh */
 export function timingFatigue(f: number): number {
   return f < low() ? 0.55 + f * 1.1 : 1;
 }
@@ -50,7 +50,7 @@ export function fatigueEffects(f: number): FatigueEffect[] {
   return [
     { label: 'Top speed', delta: moveFatigue(f) - 1 },
     { label: 'Acceleration', delta: moveFatigue(f) - 1 },
-    { label: 'Timing window', delta: timingFatigue(f) - 1 },
+    { label: 'Aim zone closing', delta: timingFatigue(f) - 1 },
     { label: 'Shot accuracy', delta: 1 / errorFatigue(f) - 1 },
     { label: 'Shot power', delta: pace - 1 },
     { label: 'Serve speed', delta: serve - 1 },

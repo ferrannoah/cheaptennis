@@ -63,7 +63,7 @@ export class VersusSetup extends MenuScene {
   draw(ctx: CanvasRenderingContext2D): void {
     drawSetupScreen(ctx, this.t, 'VERSUS', this.items(), this.sel, '', this.surface);
     const k1 = settings.keys.vs1, k2 = settings.keys.vs2;
-    const l = (k: typeof k1) => `${['up', 'left', 'down', 'right'].map((a) => keyLabel(k[a as 'up'][0])).join('')} move  •  ${keyLabel(k.normal[0])} shot  ${keyLabel(k.topspin[0])} top  ${keyLabel(k.slice[0])} slice  ${keyLabel(k.lob[0])} lob  ${keyLabel(k.drop[0])} drop`;
+    const l = (k: typeof k1) => `${['up', 'left', 'down', 'right'].map((a) => keyLabel(k[a as 'up'][0])).join('')} move  •  hold ${keyLabel(k.b1[0])} strike 1  ${keyLabel(k.b2[0])} strike 2  ${keyLabel(k.acc[0])} accel  ${keyLabel(k.gesture[0])} gesture`;
     text(ctx, 'P1: ' + l(k1), W / 2, H - 58, { size: 11, align: 'center', outline: 'rgba(10,20,40,0.85)', weight: 700 });
     text(ctx, 'P2: ' + l(k2), W / 2, H - 40, { size: 11, align: 'center', outline: 'rgba(10,20,40,0.85)', weight: 700 });
   }

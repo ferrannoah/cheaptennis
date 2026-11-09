@@ -10,9 +10,11 @@ import { TacticId } from '../data/tactics';
 import { roundRect } from './ui';
 import { W, H, game } from '../core/game';
 import { T } from '../data/tuning';
-import { settings } from '../core/settings';
+import { settings, Preview } from '../core/settings';
 import { SURFACES, SurfaceId } from '../data/surfaces';
 import { Grade } from '../match/shots';
+import { prepQ, Zone } from '../match/strike';
+import type { GestureKind } from '../match/player';
 import { ShotType } from '../data/types';
 import { Venue, VenueLook, venueFor, venueKey, venueLook } from '../data/venues';
 import { fatigueEffects } from '../match/fatigue';
@@ -21,7 +23,11 @@ import { fatigueEffects } from '../match/fatigue';
 const PHOTOGRAPHERS: [number, number][] = [[-7.6, 18.7], [-5.6, 18.9], [5.4, 18.9], [7.4, 18.7]];
 
 export const GRADE_COLOR: Record<Grade | 'MISS', string> = {
-  PERFECT: '#ffd23a', GOOD: '#9ef07a', EARLY: '#7fd0ff', LATE: '#ffa04a', MISHIT: '#ff6262', MISS: '#ff8a8a',
+  PERFECT: '#ffd23a', GOOD: '#9ef07a', RUSHED: '#7fd0ff', RISING: '#ff9a4a', OFFCENTRE: '#ffb86a', SAFE: '#cfd8e6', MISHIT: '#ff6262', MISS: '#ff8a8a',
+};
+const ZONE_COLOR: Record<Zone, string> = { green: '#5fe07a', orange: '#ff9a2e', red: '#ff3b3b' };
+const GESTURE_POSE: Record<GestureKind, keyof typeof POSES> = {
+  jump: 'celebrate', fist: 'gFist', rage: 'gRage', sorry: 'gSorry', applaud: 'gApplaud', facepalm: 'gFacepalm', crazy: 'gCrazy', throw: 'gThrow',
 };
 
 interface Popup { text: string; sub: string; color: string; x: number; y: number; t: number; life: number; big: boolean }
@@ -219,11 +225,16 @@ export class MatchView {
         if (id !== 'hard') this.stampWear(p.x, p.y, 0.22, id === 'grass' ? 0.07 : 0.08);
       }
       if (p.sweat && Math.random() < 0.06) this.particles.spawn('sweat', p.x, p.y, 1.75, 1, '#bfe6ff', 0.5);
+      // (M21) the racket smokes from the last good acceleration of the point on
+      if (p.smoke > 0 && Math.random() < 0.45) {
+        const rs = (p.side === 0 ? 1 : -1) * (p.setup.hand === 'R' ? 1 : -1) * (p.facingFh ? 1 : -1);
+        this.particles.spawn('dust', p.x + rs * 0.55, p.y, 1.25, 1, '#9aa3ad', 0.7);
+      }
     }
   }
 
   // ======================================================== drawing
-  draw(ctx: CanvasRenderingContext2D, opts: { hud: boolean; training: boolean; labels?: [string, string] }): void {
+  draw(ctx: CanvasRenderingContext2D, opts: { hud: boolean; preview: Preview; labels?: [string, string] }): void {
     const m = this.m;
     const sx = game.shakeX, sy = game.shakeY;
     ctx.save();
@@ -236,20 +247,7 @@ export class MatchView {
     if (this.venue.theme.night) this.drawFloodlights(ctx);
     this.drawFlashes(ctx);
 
-    // training HUD: predicted landing
-    if (opts.training && m.predicted && m.ballLive && !m.rally.dead && m.rally.bounces === 0) {
-      const p = this.cam.project(m.predicted.x, m.predicted.y, 0);
-      const pulse = 1 + Math.sin(this.time * 10) * 0.15;
-      ctx.strokeStyle = 'rgba(255,240,80,0.9)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y, 0.35 * p.s * pulse, 0.16 * p.s * pulse, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(p.x - 0.2 * p.s, p.y);
-      ctx.lineTo(p.x + 0.2 * p.s, p.y);
-      ctx.stroke();
-    }
+    if (opts.preview !== 'off') this.drawPreview(ctx, opts.preview);
 
     // shadows
     for (const p of m.players) if (!(m.practice && p.idx === 1)) drawShadow(ctx, this.cam, p.x, p.y, 0.48);
@@ -292,8 +290,116 @@ export class MatchView {
     }
     ctx.restore();
 
-    if (opts.hud) this.drawHud(ctx, opts.training);
+    if (opts.hud) this.drawHud(ctx);
     this.drawPopups(ctx);
+  }
+
+  /** ground ellipse of radius r (m) around a court point */
+  private groundEllipse(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+    const c = this.cam.project(x, y, 0);
+    const ex = this.cam.project(x + r, y, 0);
+    const ey = this.cam.project(x, y + r, 0);
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, Math.max(1, Math.abs(ex.x - c.x)), Math.max(0.8, Math.abs(ey.y - c.y)), 0, 0, Math.PI * 2);
+  }
+
+  /**
+   * (M21) The court preview for human players: the impact marker, the danger zone along the ball's
+   * path after the bounce with the two green spots, the live aiming zone while a strike button is
+   * held, and the preparation ring at the player's feet.
+   */
+  private drawPreview(ctx: CanvasRenderingContext2D, level: Preview): void {
+    const m = this.m;
+    const live = m.ballLive && !m.rally.dead;
+    for (const p of m.players) {
+      if (!(p.human || (m.practice && p.idx === 0))) continue;
+      const incoming = live && m.incomingFor(p);
+      // impact marker
+      if (incoming && m.predicted && m.rally.bounces === 0) {
+        const c = this.cam.project(m.predicted.x, m.predicted.y, 0);
+        const pulse = 1 + Math.sin(this.time * 10) * 0.15;
+        ctx.strokeStyle = 'rgba(255,240,80,0.9)';
+        ctx.lineWidth = 1.5;
+        this.groundEllipse(ctx, m.predicted.x, m.predicted.y, 0.32 * pulse);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(c.x - 0.2 * c.s, c.y);
+        ctx.lineTo(c.x + 0.2 * c.s, c.y);
+        ctx.stroke();
+      }
+      // danger zone + green spots
+      if (incoming && level !== 'impact') {
+        const rd = m.readBall(p);
+        if (rd) {
+          ctx.save();
+          ctx.lineCap = 'round';
+          for (let i = 1; i < rd.samples.length; i++) {
+            const a = rd.samples[i - 1], b = rd.samples[i];
+            if (a.d <= 0.22 && b.d <= 0.22) break; // the danger is over: the green spots take it from here
+            const pa = this.cam.project(a.x, a.y, 0), pb = this.cam.project(b.x, b.y, 0);
+            ctx.strokeStyle = a.d > 0.55 ? 'rgba(255,59,59,0.55)' : 'rgba(255,154,46,0.5)';
+            ctx.lineWidth = Math.max(2, 0.5 * pa.s);
+            ctx.beginPath();
+            ctx.moveTo(pa.x, pa.y);
+            ctx.lineTo(pb.x, pb.y);
+            ctx.stroke();
+          }
+          for (const s of rd.spots) {
+            const chosen = rd.pick && Math.abs(rd.pick.x - s.x) < 0.01;
+            ctx.fillStyle = chosen ? 'rgba(95,224,122,0.5)' : 'rgba(95,224,122,0.28)';
+            ctx.strokeStyle = chosen ? 'rgba(170,255,180,0.95)' : 'rgba(170,255,180,0.55)';
+            ctx.lineWidth = 1.2;
+            this.groundEllipse(ctx, s.x, s.y, 0.34);
+            ctx.fill();
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+      if (level === 'all') {
+        // aiming zone (rally) or serve target
+        const pv = incoming ? m.strikePreview(p) : m.phase === 'serve' && m.server === p ? m.servePreview(p) : null;
+        if (pv) {
+          ctx.save();
+          ctx.fillStyle = 'rgba(255,255,255,0.13)';
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([4, 3]);
+          this.groundEllipse(ctx, pv.tx, pv.ty, Math.max(0.2, pv.r));
+          ctx.fill();
+          ctx.stroke();
+          ctx.setLineDash([]);
+          const c = this.cam.project(pv.tx, pv.ty, 0);
+          ctx.strokeStyle = '#ffd23a';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(c.x - 4, c.y);
+          ctx.lineTo(c.x + 4, c.y);
+          ctx.moveTo(c.x, c.y - 3);
+          ctx.lineTo(c.x, c.y + 3);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      // preparation ring: closes as the aiming zone shrinks
+      if (p.strike.held && (incoming || m.phase === 'serve')) {
+        const q = prepQ((m.frame - p.strike.since) / 60, m.controls.mode);
+        const c = this.cam.project(p.x, p.y, 0);
+        const ex = this.cam.project(p.x + 0.6, p.y, 0);
+        const rx = Math.abs(ex.x - c.x);
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(10,18,34,0.45)';
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y, rx, rx * 0.4, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = q > 0.88 ? '#ffd23a' : q > 0.55 ? '#9ef07a' : '#7fd0ff';
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y, rx, rx * 0.4, 0, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * q);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
   }
 
   private drawBallMachine(ctx: CanvasRenderingContext2D): void {
@@ -394,6 +500,12 @@ export class MatchView {
         return out;
       }
     }
+    if (p.gesture && p.gesture.t < 160 && (m.phase === 'dead' || m.phase === 'over' || m.phase === 'serve')) {
+      const g = POSES[GESTURE_POSE[p.gesture.kind]];
+      // fists pump, the crazy one shakes
+      if (p.gesture.kind === 'fist' || p.gesture.kind === 'crazy') return lerpPose(POSES.ready, g, 0.75 + 0.25 * Math.sin(p.gesture.t * 0.35));
+      return lerpPose(POSES.ready, g, smooth(Math.min(1, p.gesture.t / 8)));
+    }
     if (p.celebrate > 0 && (m.phase === 'dead' || m.phase === 'over')) return POSES.celebrate;
     const sp = Math.hypot(p.vx, p.vy);
     if (sp > 0.6) {
@@ -416,11 +528,12 @@ export class MatchView {
     if (p.splitStep > 0) bob = Math.sin((p.splitStep / 12) * Math.PI) * 0.1;
     else if (Math.hypot(p.vx, p.vy) < 0.5) bob = Math.sin(this.time * 4 + p.idx) * 0.012;
     if (p.celebrate > 0 && (this.m.phase === 'dead' || this.m.phase === 'over')) bob = Math.abs(Math.sin(this.time * 9)) * 0.12;
+    if (p.gesture?.kind === 'jump' && p.gesture.t < 160) bob = Math.abs(Math.sin(p.gesture.t * 0.16)) * 0.35;
     drawFigure(ctx, pr.x, pr.y, pr.s * FIGURE_SCALE, pose, p.setup.kit, { mirror, facingCamera: p.side === 1, twoHanded: p.setup.twoHanded, bob });
   }
 
   // ======================================================== HUD
-  private drawHud(ctx: CanvasRenderingContext2D, training: boolean): void {
+  private drawHud(ctx: CanvasRenderingContext2D): void {
     const m = this.m;
     const sc = m.score;
     const [p0, p1] = m.players;
@@ -440,9 +553,8 @@ export class MatchView {
       this.staminaBar(ctx, p0, 10, H - 58, p0.setup.short);
     }
 
-    // timing meters
-    for (const p of m.players) if (p.human || (m.practice && p.idx === 0)) this.drawMeter(ctx, p, training);
-    if (m.phase === 'serve' && m.server.human && m.server.serve.phase !== 'hit') this.drawServeMeter(ctx, m.server, training);
+    // (M21) centring icon after a human's error
+    if (m.missIcon) this.drawMissIcon(ctx, m.missIcon.zone, m.missIcon.body, m.missIcon.t);
 
     // umpire call
     if (this.call) {
@@ -605,6 +717,66 @@ export class MatchView {
     ctx.fill();
     if (low) text(ctx, 'TIRED', bx + w + 4, y + 5, { size: 8, color: '#ff8a7a', weight: 800 });
     if (p.human) this.fatigueInfo(ctx, p, x - 4, y, y > H / 2);
+    if (p.human || this.m.practice) this.accelPips(ctx, p, x + (p.human ? 236 : 174), y);
+  }
+
+  /** (M21) good accelerations left this point; smoke once they are used up */
+  private accelPips(ctx: CanvasRenderingContext2D, p: Player, x: number, y: number): void {
+    const n = p.accelQuota;
+    const w = 26 + n * 9;
+    ctx.fillStyle = 'rgba(10,18,34,0.6)';
+    roundRect(ctx, x, y - 2, w, 14, 7);
+    ctx.fill();
+    text(ctx, 'ACC', x + 6, y + 5, { size: 8, color: '#d6e4f7', weight: 800 });
+    for (let i = 0; i < n; i++) {
+      const left = i < n - p.accelUsed;
+      ctx.fillStyle = left ? '#ffd23a' : 'rgba(255,255,255,0.18)';
+      ctx.beginPath();
+      ctx.arc(x + 28 + i * 9, y + 5, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (p.accelUsed > n) text(ctx, `+${p.accelUsed - n}`, x + w + 3, y + 5, { size: 8, color: '#b9c2cc', weight: 800 });
+  }
+
+  /** (M21) after an error: how was it struck? green centred, orange off-centre, red into the body / at full stretch */
+  private drawMissIcon(ctx: CanvasRenderingContext2D, zone: Zone, body: boolean, t: number): void {
+    const a = Math.min(1, t / 6) * Math.min(1, (150 - t) / 20);
+    const x = W - 46, y = H - 74, s = 30;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = ZONE_COLOR[zone];
+    roundRect(ctx, x, y, s, s, 6);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(10,18,34,0.85)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // a little player hitting the ball: body, racket, ball
+    ctx.strokeStyle = '#13284a';
+    ctx.fillStyle = '#13284a';
+    ctx.beginPath();
+    ctx.arc(x + 11, y + 8, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(x + 11, y + 11);
+    ctx.lineTo(x + 11, y + 20);
+    ctx.lineTo(x + 7, y + 27);
+    ctx.moveTo(x + 11, y + 20);
+    ctx.lineTo(x + 15, y + 27);
+    ctx.moveTo(x + 11, y + 14);
+    ctx.lineTo(x + 18, y + 15);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(x + 21, y + 14, 3, 4, 0.3, 0, Math.PI * 2);
+    ctx.stroke();
+    const bx = zone === 'green' ? x + 25 : body ? x + 13 : x + 28;
+    ctx.fillStyle = '#e8ff5a';
+    ctx.beginPath();
+    ctx.arc(bx, y + 14, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    const label = zone === 'green' ? 'CENTRED' : body ? (zone === 'red' ? 'INTO BODY' : 'TOO CLOSE') : zone === 'red' ? 'FULL STRETCH' : 'OFF-CENTRE';
+    text(ctx, label, x + s / 2, y + s + 9, { size: 8, align: 'center', color: '#fff', outline: '#13284a', weight: 800, alpha: a });
   }
 
   /** "H" hint chip next to a human's stamina bar, and (when toggled on) what tiredness costs right now */
@@ -624,108 +796,13 @@ export class MatchView {
     ctx.fillStyle = 'rgba(10,18,34,0.78)';
     roundRect(ctx, x, y, w, h, 8);
     ctx.fill();
-    text(ctx, `FATIGUE  •  stamina ${Math.round(p.stamina)}%`, x + 8, y + 10, { size: 9, color: '#ffd479', weight: 800 });
+    text(ctx, `FATIGUE  â€¢  stamina ${Math.round(p.stamina)}%`, x + 8, y + 10, { size: 9, color: '#ffd479', weight: 800 });
     effects.forEach((e, i) => {
       const yy = y + 22 + i * rowH;
       const pct = Math.round(e.delta * 100);
       text(ctx, e.label, x + 8, yy, { size: 9, color: '#d6e4f7', weight: 700 });
       text(ctx, pct === 0 ? 'OK' : `${pct}%`, x + w - 8, yy, { size: 9, align: 'right', color: pct === 0 ? '#7fe08f' : pct > -10 ? '#f2d23a' : '#ff8a7a', weight: 800 });
     });
-  }
-
-  private drawMeter(ctx: CanvasRenderingContext2D, p: Player, training: boolean): void {
-    if (p.meterShow <= 0) return;
-    const pr = this.cam.project(p.x, p.y, 1.0);
-    const cx = pr.x + (p.side === 0 ? 30 : 24);
-    const cy = pr.y - 6;
-    const R = p.side === 0 ? 13 : 10;
-    const span = 36;
-    const a0 = Math.PI * 0.75;
-    const a1 = Math.PI * 2.25;
-    const alpha = Math.min(1, p.meterShow / 12);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = 'rgba(10,18,34,0.55)';
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(cx, cy, R, a0, a1);
-    ctx.stroke();
-    const toAng = (off: number) => {
-      const k = Math.max(0, Math.min(1, 1 - off / span));
-      return a0 + (a1 - a0) * 0.75 * k;
-    };
-    const wm = p.windowMul();
-    if (training) {
-      ctx.strokeStyle = 'rgba(160,240,120,0.55)';
-      ctx.lineWidth = 6;
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, toAng(T.goodWin * wm), toAng(-T.goodWin * wm));
-      ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,210,58,0.95)';
-      ctx.beginPath();
-      ctx.arc(cx, cy, R, toAng(T.perfectWin * wm), toAng(-T.perfectWin * wm));
-      ctx.stroke();
-    } else {
-      // perfect notch
-      const pa = toAng(0);
-      ctx.strokeStyle = '#ffd23a';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(pa) * (R - 5), cy + Math.sin(pa) * (R - 5));
-      ctx.lineTo(cx + Math.cos(pa) * (R + 5), cy + Math.sin(pa) * (R + 5));
-      ctx.stroke();
-    }
-    if (p.meterA >= 0 || p.meterA > -12) {
-      const off = p.meterA - T.windup;
-      if (p.meterA > -12 && p.meterA !== -1) {
-        ctx.strokeStyle = off > T.goodWin * wm ? '#ffffff' : '#ffd23a';
-        ctx.lineWidth = 3.5;
-        ctx.beginPath();
-        ctx.arc(cx, cy, R, a0, toAng(off));
-        ctx.stroke();
-      }
-    }
-    if (p.meterMark !== null) {
-      const ma = toAng(p.meterMark);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(ma) * (R - 6), cy + Math.sin(ma) * (R - 6));
-      ctx.lineTo(cx + Math.cos(ma) * (R + 6), cy + Math.sin(ma) * (R + 6));
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  private drawServeMeter(ctx: CanvasRenderingContext2D, p: Player, training: boolean): void {
-    const pr = this.cam.project(p.x, p.y, 1.0);
-    const x = pr.x + (p.side === 0 ? 26 : 22);
-    const y = pr.y - 40;
-    const h = 42;
-    ctx.fillStyle = 'rgba(10,18,34,0.6)';
-    roundRect(ctx, x - 5, y - 2, 10, h + 4, 5);
-    ctx.fill();
-    const apex = p.serve.tossApex;
-    const perfY = y + 6;
-    if (training) {
-      ctx.fillStyle = 'rgba(160,240,120,0.5)';
-      ctx.fillRect(x - 3, perfY - 6, 6, 12);
-    }
-    ctx.fillStyle = '#ffd23a';
-    ctx.fillRect(x - 4, perfY - 1.5, 8, 3);
-    if (p.serve.phase === 'toss') {
-      const t = p.serve.t;
-      // ball height indicator: rises to the notch at apex then falls
-      const k = t <= apex ? t / apex : 1 - (t - apex) / apex;
-      const by = y + h - (h - 6) * Math.max(0, k);
-      ctx.fillStyle = t <= apex ? '#ffffff' : '#ffb0a0';
-      ctx.beginPath();
-      ctx.arc(x, by, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      text(ctx, 'SPACE', x, y + h + 10, { size: 8, align: 'center', color: '#fff' });
-    }
   }
 
   private drawPopups(ctx: CanvasRenderingContext2D): void {

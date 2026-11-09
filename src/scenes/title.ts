@@ -48,8 +48,8 @@ export class TitleScene extends MenuScene {
     roundRect(ctx, 34, 388, W - 68, 76, 12);
     ctx.fill();
     text(ctx, 'HOW TO PLAY', 50, 404, { size: 12, color: '#ffc04a' });
-    text(ctx, 'Arrows move  •  Space swings (time it as the ball arrives)  •  hold an arrow at contact to aim', 50, 424, { size: 11, weight: 700 });
-    text(ctx, 'Z topspin  •  X slice  •  C lob  •  V drop shot  •  Serve: Space to toss, Space again at the top', 50, 442, { size: 11, weight: 700 });
+    text(ctx, 'HOLD X (or Space) before the ball comes and keep holding: you hit it by yourself. Press early = accurate.', 50, 424, { size: 10, weight: 700 });
+    text(ctx, 'While holding: ←/→ sweeps the aim, ↑ short / ↓ topspin  •  Z slice (↑ drop, ↓ lob)  •  X+Z or C acceleration', 50, 442, { size: 10, weight: 700 });
     text(ctx, `M mute ${settings.muted ? '(muted)' : ''}  •  Esc pause`, 50, 458, { size: 9, weight: 700, color: '#bcd0ee' });
     if (audio.state === 'locked') {
       const a = 0.6 + Math.sin(t * 4) * 0.4;

@@ -1,11 +1,15 @@
 import { loadJSON, saveJSON } from './save';
 
-export type Action = 'left' | 'right' | 'up' | 'down' | 'normal' | 'topspin' | 'slice' | 'lob' | 'drop';
-export const ACTIONS: Action[] = ['left', 'right', 'up', 'down', 'normal', 'topspin', 'slice', 'lob', 'drop'];
+/**
+ * M21 "Elbow" controls: two strike buttons held through contact. B1+B2 (or the Accel key) = acceleration.
+ * Up/down while holding picks the strike, left/right sweeps the aim.
+ */
+export type Action = 'left' | 'right' | 'up' | 'down' | 'b1' | 'b2' | 'acc' | 'gesture';
+export const ACTIONS: Action[] = ['left', 'right', 'up', 'down', 'b1', 'b2', 'acc', 'gesture'];
+export const STRIKE_ACTIONS: Action[] = ['b1', 'b2', 'acc', 'gesture'];
 export const ACTION_LABEL: Record<Action, string> = {
-  left: 'Left', right: 'Right', up: 'Up / Deep', down: 'Down / Short',
-  normal: 'Normal shot / Serve', topspin: 'Topspin / Kick serve', slice: 'Slice / Slice serve',
-  lob: 'Lob', drop: 'Drop shot',
+  left: 'Left', right: 'Right', up: 'Up (toward the net)', down: 'Down (away from the net)',
+  b1: 'Strike 1: normal / top / short', b2: 'Strike 2: slice / drop / lob', acc: 'Acceleration (= 1 + 2)', gesture: 'Gesture (after a point)',
 };
 
 export type Profile = 'solo' | 'vs1' | 'vs2';
@@ -14,29 +18,32 @@ export type KeyBindings = Record<Action, string[]>;
 export const DEFAULT_KEYS: Record<Profile, KeyBindings> = {
   solo: {
     left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'],
-    normal: ['Space'], topspin: ['KeyZ'], slice: ['KeyX'], lob: ['KeyC'], drop: ['KeyV'],
+    b1: ['KeyX', 'Space'], b2: ['KeyZ'], acc: ['KeyC'], gesture: ['KeyV'],
   },
   vs1: {
     left: ['KeyA'], right: ['KeyD'], up: ['KeyW'], down: ['KeyS'],
-    normal: ['KeyF'], topspin: ['KeyG'], slice: ['KeyH'], lob: ['KeyJ'], drop: ['KeyK'],
+    b1: ['KeyF'], b2: ['KeyG'], acc: ['KeyR'], gesture: ['KeyT'],
   },
   vs2: {
     left: ['ArrowLeft'], right: ['ArrowRight'], up: ['ArrowUp'], down: ['ArrowDown'],
-    normal: ['Numpad1', 'Digit1'], topspin: ['Numpad2', 'Digit2'], slice: ['Numpad3', 'Digit3'],
-    lob: ['Numpad4', 'Digit4'], drop: ['Numpad5', 'Digit5'],
+    b1: ['Numpad1', 'Digit1'], b2: ['Numpad2', 'Digit2'], acc: ['Numpad3', 'Digit3'], gesture: ['Numpad4', 'Digit4'],
   },
 };
 
 /** Standard-mapping gamepad buttons. Movement always also uses stick + d-pad. */
 export const DEFAULT_PAD: Partial<Record<Action, number>> = {
-  normal: 0, // A
-  topspin: 2, // X
-  slice: 1, // B
-  lob: 3, // Y
-  drop: 5, // RB
+  b1: 0, // A
+  b2: 2, // X
+  acc: 1, // B
+  gesture: 3, // Y
 };
 
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'pro';
+/** Arcade halves the danger-zone/off-centre penalties and shrinks the aiming zone twice as fast (Tennis Elbow's Arcade mode) */
+export type ControlMode = 'arcade' | 'sim';
+export type AutoPos = 'slow' | 'average' | 'fast';
+/** what the court preview shows: impact marker, + danger zone, + live aiming zone */
+export type Preview = 'off' | 'impact' | 'danger' | 'all';
 
 export interface Settings {
   version: 1;
@@ -54,6 +61,9 @@ export interface Settings {
   showFps: boolean;
   /** in-match panel showing what tiredness is costing (toggle with H) */
   fatigueInfo: boolean;
+  controlMode: ControlMode;
+  autoPos: AutoPos;
+  preview: Preview;
 }
 
 function defaults(): Settings {
@@ -72,6 +82,9 @@ function defaults(): Settings {
     reducedShake: false,
     showFps: false,
     fatigueInfo: false,
+    controlMode: 'arcade',
+    autoPos: 'fast',
+    preview: 'all',
   };
 }
 
@@ -80,10 +93,16 @@ export const settings: Settings = (() => {
   const s = loadJSON<Partial<Settings>>('settings', {});
   const merged = { ...d, ...s } as Settings;
   // make sure every action has bindings after version changes
+  // (M21: saves from the old 5-shot-button scheme keep only their movement keys)
+  const pick = <V>(o: Partial<Record<string, V>> | undefined): Partial<Record<Action, V>> => {
+    const r: Partial<Record<Action, V>> = {};
+    if (o) for (const a of ACTIONS) if (o[a] !== undefined) r[a] = o[a];
+    return r;
+  };
   for (const p of ['solo', 'vs1', 'vs2'] as Profile[]) {
-    merged.keys[p] = { ...d.keys[p], ...(s.keys?.[p] ?? {}) };
+    merged.keys[p] = { ...d.keys[p], ...pick(s.keys?.[p] as Partial<Record<string, string[]>>) } as KeyBindings;
   }
-  merged.pad = { ...d.pad, ...(s.pad ?? {}) };
+  merged.pad = { ...d.pad, ...pick(s.pad as Partial<Record<string, number>>) };
   return merged;
 })();
 

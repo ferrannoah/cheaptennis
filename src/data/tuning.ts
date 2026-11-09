@@ -55,7 +55,8 @@ export const T = {
   backpedalErr: 2.2, // extra error for a ball hit in the air while running back at full speed
   // (M20) COM court position, fitted to the Free Tennis footage (contact ≈ on the baseline, a shot every ~1.0 s)
   aiHomeShift: 1.8, // m: every archetype recovers this much closer to the baseline than its homeBack
-  aiDeepCost: 0.9, // plan cost per metre of contact behind (baseline - 0.5 m)
+  aiDeepCost: 0.5, // plan cost per metre of contact behind (baseline - 0.5 m) (M21: 0.9 -> 0.5, Elbow players stand deeper)
+  aiDangerCost: 4, // (M21) plan cost of contact in the danger zone (×0..1)
 
   // ball physics
   drag: 0.0052,
@@ -78,4 +79,30 @@ export const T = {
   lowStamina: 40,
 
   hitstopPerfect: 4,
+
+  // ---- M21 "Elbow" strike model (hold the button through contact; see GDD §2.5)
+  aimMax: 1.3, // aim sweep limit (1 = the sideline target; beyond it the ball goes wide)
+  aimSweepBase: 0.3, // s to sweep from the centre to the line when standing at the net...
+  aimSweepPerM: 0.055, // ...plus this per metre from the net (≈0.95 s at the baseline, ≈1.1 s 3 m behind)
+  serveAimSweep: 0.45, // s to sweep a serve from the box centre to its edge
+  autoPosSpeed: { slow: 1.5, average: 2.3, fast: 3.1 } as Record<'slow' | 'average' | 'fast', number>, // m/s while a strike button is held
+  aiAutoPos: 2.3,
+  zoneR0: 2.4, // m: radius (60% of landings) of the aiming zone when pressed at the last moment
+  zoneRminBase: 0.3, // m: smallest zone at 99 skill...
+  zoneRminSkill: 0.5, // ...plus this much at 0 skill
+  zoneMax: 4.0,
+  prepTauArcade: 0.2, // s: the zone closes as exp(-prep / tau); Arcade twice as fast as Simulation
+  prepTauSim: 0.4,
+  safeZone: 1.35, // zone for a safe strike (nothing held)
+  safeReach: 0.2, // extra reach beyond `reach` without a button held (no stretching)
+  idealLat1H: 0.82, // m: ball-to-body distance on the racket's sweet spot (1-handed)
+  idealLat2H: 0.72, // 2-handed strokes need to be closer
+  dangerRed: 0.55, // rising-ball danger thresholds (vz / vz just after the bounce, weighted by pace)
+  dangerOrange: 0.22,
+  centreOrange: 0.35, // off-centre thresholds (0 = sweet spot, 1 = into the body / at full stretch)
+  centreRed: 0.7,
+  volleyZoneY: 7.5, // m from the net: auto-positioning goes for the volley inside this
+  diveReachMul: 1.14, // volley jump reach (holding a button at the net)
+  accelPowerDrain: 0.9, // extra stamina per acceleration
+  smokeFrames: 100,
 };

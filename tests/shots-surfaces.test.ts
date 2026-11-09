@@ -5,6 +5,7 @@ import { SURFACES, SurfaceId } from '../src/data/surfaces';
 import { flatStats, ShotType, ServeType } from '../src/data/types';
 import { Rng } from '../src/core/rng';
 import { netHeightAt } from '../src/data/court';
+import { shotInput } from './shot-input';
 
 interface Flight { maxZ: number; netClear: number; b1: number; apex2: number; speed2: number; gap: number; b1x: number; kmh: number }
 
@@ -39,10 +40,7 @@ function shot(type: ShotType, sf: SurfaceId): Flight {
   // average a few seeds of GOOD shots aimed straight
   const acc: Flight[] = [];
   for (let s = 1; s <= 6; s++) {
-    const inp: ShotInput = {
-      type, from, dir: 1, aimX: 0.05, aimDepth: 0, grade: 'PERFECT', offset: 0, stats: flatStats(75), stamina: 100, speedRatio: 0, stretch: 0,
-      contactZ: 0.95, lateral: 0.8, sideSign: 1, fh: true, volley: false, overhead: false, isReturn: false, badges: [], rng: new Rng(s),
-    };
+    const inp: ShotInput = shotInput({ strike: type, from, aimX: 0.05, rng: new Rng(s) });
     acc.push(fly(makeShot(inp, SURFACES[sf]).ball, sf));
   }
   const avg = {} as Flight;
@@ -52,7 +50,7 @@ function shot(type: ShotType, sf: SurfaceId): Flight {
 
 function serve(type: ServeType, sf: SurfaceId): Flight {
   const b0: BallState = { x: 1.0, y: -11.8, z: 3.0, vx: 0, vy: 0, vz: 0, spin: 0, side: 0 };
-  const r = makeServe({ from: b0, dir: 1, serverX: 0.9, aimX: 0, type, quality: 'PERFECT', tossOffset: 0, stats: flatStats(75), stamina: 100, badges: [], second: false, rng: new Rng(3) }, SURFACES[sf]);
+  const r = makeServe({ from: b0, dir: 1, serverX: 0.9, aimX: 0, type, force: 'safe', prep: 0.6, stats: flatStats(75), stamina: 100, badges: [], second: false, rng: new Rng(3) }, SURFACES[sf]);
   return fly(r.ball, sf);
 }
 

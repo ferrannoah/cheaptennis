@@ -7,6 +7,8 @@ import { settings, saveSettings } from '../core/settings';
 import { PauseScene } from './pause';
 import { Player } from '../match/player';
 import { text } from '../gfx/text';
+import { GRADE_LABEL } from '../match/shots';
+import { STRIKES } from '../match/strike';
 
 export interface MatchResult {
   winner: 0 | 1;
@@ -39,7 +41,7 @@ export class MatchScene implements Scene {
   breathT = 0;
 
   constructor(public cfg: MatchConfig, public opts: MatchSceneOpts) {
-    this.m = new Match(cfg);
+    this.m = new Match({ ...cfg, controls: cfg.controls ?? { mode: settings.controlMode, autoPos: settings.autoPos } });
     this.view = new MatchView(this.m);
   }
 
@@ -126,17 +128,19 @@ export class MatchScene implements Scene {
           const p = m.players[e.p];
           const pan = (p.x / 8) * 0.6;
           if (e.volley) audio.sfx('volley', 1, 1, pan);
-          else audio.sfx(e.grade === 'PERFECT' ? 'hit_perfect' : e.grade === 'GOOD' ? 'hit_good' : e.grade === 'MISHIT' ? 'hit_mishit' : 'hit_weak', 1, 0.97 + Math.random() * 0.06, pan);
+          else audio.sfx(e.grade === 'PERFECT' ? 'hit_perfect' : e.grade === 'GOOD' || STRIKES[e.strike].accel ? 'hit_good' : e.grade === 'MISHIT' ? 'hit_mishit' : 'hit_weak', 1, 0.97 + Math.random() * 0.06, pan);
           if (e.grade === 'PERFECT') {
             audio.sfx('perfect', 0.9);
             if (!settings.reducedShake) game.shake = 3;
             v.particles.spawn('spark', m.ball.x, m.ball.y, m.ball.z, 10, '#fff6a0', 1);
             v.flashRing(m.ball.x, m.ball.y, m.ball.z);
           }
+          if (e.accelOver > 0 || (STRIKES[e.strike].accel && p.smoke > 0)) v.particles.spawn('dust', m.ball.x, m.ball.y, m.ball.z, 6, '#9aa3ad', 0.9);
           const human = p.human || m.cfg.controllers.every((c) => c === null);
-          const label = e.grade === 'PERFECT' ? 'PERFECT!' : e.grade;
-          let sub = e.reason;
-          if (e.grade === 'GOOD' && e.reason === 'clean contact') sub = e.volley ? 'volley' : '';
+          // (M21) the popup names the strike; the sub-line says what helped or hurt it
+          const label = GRADE_LABEL[e.grade];
+          const strikeName = e.strike === 'normal' || e.strike === 'safe' ? '' : STRIKES[e.strike].label.toUpperCase();
+          const sub = [strikeName, e.reason].filter(Boolean).join('  •  ');
           v.popup(p, label, human ? sub : '', GRADE_COLOR[e.grade], human);
           if (e.dive) v.particles.spawn(sfId === 'clay' ? 'dust' : 'grass', p.x, p.y, 0.1, 6, sfId === 'clay' ? '#e0a07a' : '#7ccf5a', 1);
           break;
@@ -153,13 +157,16 @@ export class MatchScene implements Scene {
         case 'serve': {
           const p = m.players[e.p];
           v.lastServeKmh = e.kmh;
-          audio.sfx(e.grade === 'PERFECT' ? 'hit_perfect' : 'hit_good', 1);
-          if (e.grade === 'PERFECT') audio.sfx('perfect', 0.7);
+          audio.sfx(e.force === 'strong' ? 'hit_perfect' : 'hit_good', 1);
           const typeLabel = e.type === 'flat' ? '' : e.type === 'kick' ? 'KICK ' : 'SLICE ';
-          const tag = e.grade === 'PERFECT' ? 'PERFECT' : e.grade === 'GOOD' ? 'GOOD' : e.grade;
-          v.popup(p, `${typeLabel}${Math.round(e.kmh)} km/h`, p.human ? `${tag} toss timing` : '', GRADE_COLOR[e.grade], p.human);
+          const force = { strong: 'STRONG serve', normal: 'NORMAL serve', safe: 'SAFE serve' }[e.force];
+          v.popup(p, `${typeLabel}${Math.round(e.kmh)} km/h`, p.human ? force : '', GRADE_COLOR[e.grade], p.human);
           break;
         }
+        case 'gesture':
+          if (e.kind === 'throw') audio.sfx('net_thud', 0.6);
+          else if (e.kind === 'jump' || e.kind === 'fist') audio.sfx('applause_small', 0.4 * v.look.noise);
+          break;
         case 'bounce': {
           audio.sfx('bounce_' + sfId, Math.min(1, 0.4 + e.speed / 25), 0.96 + Math.random() * 0.08);
           if (sfId === 'clay') {
@@ -250,7 +257,7 @@ export class MatchScene implements Scene {
   }
 
   draw(ctx: CanvasRenderingContext2D): void {
-    this.view.draw(ctx, { hud: true, training: settings.trainingHud || !!this.m.practice });
+    this.view.draw(ctx, { hud: true, preview: this.m.practice && settings.preview === 'off' ? 'impact' : settings.preview });
     this.opts.practiceOverlay?.(ctx, this.m);
     if (this.m.canSkipDowntime) text(ctx, 'SPACE  skip', W - 14, H - 14, { size: 10, align: 'right', color: '#d6e4f7', outline: '#13284a', weight: 700 });
     if (settings.showFps) {

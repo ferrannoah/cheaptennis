@@ -32,14 +32,14 @@ test('options remap: rebind swing to Enter works in a match', async ({ page }) =
   await page.evaluate(() => localStorage.clear());
   await goto(page, 'remap');
   await adv(page, 5);
-  // select "Normal shot" (5th row) and press Enter to capture, then press KeyQ
+  // select "Strike 1" (5th row) and press Enter to capture, then press KeyQ
   for (let i = 0; i < 4; i++) await menu(page, 'down');
   await menu(page, 'ok');
   await adv(page, 2);
   await page.keyboard.press('KeyQ');
   await adv(page, 2);
   await shot(page, 'remap');
-  const keys = await page.evaluate(() => JSON.parse(localStorage.getItem('baseline.settings') || '{}').keys?.solo?.normal);
+  const keys = await page.evaluate(() => JSON.parse(localStorage.getItem('baseline.settings') || '{}').keys?.solo?.b1);
   expect(keys).toEqual(['KeyQ']);
   // in a match, Q now tosses the serve when the human serves
   await goto(page, 'match', { surface: 'hard', seed: 1 });

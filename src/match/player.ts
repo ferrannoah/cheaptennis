@@ -5,11 +5,14 @@ import { Surface } from '../data/surfaces';
 import { HALF_LEN, RUN_X, RUN_Y } from '../data/court';
 import { Grade } from './shots';
 import { moveFatigue, timingFatigue } from './fatigue';
+import { StrikeId, accelQuota } from './strike';
 
 export type AnimState = 'idle' | 'run' | 'swing' | 'serve' | 'dive' | 'celebrate' | 'slump' | 'walk';
 
 export interface Swing {
   type: ShotType;
+  /** the strike chosen at contact (the windup starts with what is held at that moment) */
+  strike: StrikeId;
   start: number; // frame pressed
   contactAt: number; // frame of contact
   grade: Grade | null;
@@ -27,7 +30,28 @@ export interface ServeState {
   t: number; // frames in phase
   tossApex: number; // frame of apex relative to toss start
   type: ServeType;
+  /** (M21) strike buttons latched during the toss, and how long they were held */
+  b1?: boolean;
+  b2?: boolean;
+  fwd?: number;
+  held?: number;
+  /** released before contact: free to run in straight away */
+  free?: boolean;
 }
+
+/** (M21) a strike button held through contact */
+export interface StrikeState {
+  held: boolean;
+  b1: boolean;
+  b2: boolean;
+  fwd: number;
+  /** frame the button went down (preparation counts from here) */
+  since: number;
+  /** aim sweep, -aimMax..aimMax */
+  aim: number;
+}
+
+export type GestureKind = 'jump' | 'fist' | 'rage' | 'sorry' | 'applaud' | 'facepalm' | 'crazy' | 'throw';
 
 export class Player {
   x = 0;
@@ -41,18 +65,20 @@ export class Player {
   animT = 0;
   runPhase = 0;
   serve: ServeState = { phase: 'ready', t: 0, tossApex: 34, type: 'flat' };
-  /** whether the last swing press was buffered */
-  bufferedShot: ShotType | null = null;
   /** AI risk/reward intent for the pending swing (humans: 1) */
   swingPower = 1;
-  aiAim = { x: 0, d: 0 };
-  bufferT = 0;
   facingFh = true;
   sweat = 0;
-  /** timing meter for HUD */
-  meterA = -1; // predicted frames to arrival (or -1)
-  meterMark: number | null = null; // offset of last press
-  meterShow = 0;
+  /** (M21) strike button state, accelerations this point, racket smoke, last centring */
+  strike: StrikeState = { held: false, b1: false, b2: false, fwd: 0, since: 0, aim: 0 };
+  accelUsed = 0;
+  accelQuota = 3;
+  smoke = 0;
+  lastCentre: 'green' | 'orange' | 'red' = 'green';
+  lastBody = false;
+  /** where auto-positioning is taking the player (debug/HUD) */
+  autoT: { x: number; y: number } | null = null;
+  gesture: { kind: GestureKind; t: number } | null = null;
   /** match stats */
   perfects = 0;
   aces = 0;
@@ -81,6 +107,7 @@ export class Player {
     public ctrl: Controller | null,
   ) {
     this.stamina = setup.startStamina;
+    this.accelQuota = accelQuota(stats.endurance, setup.archetype);
   }
 
   /** near player (idx side 0) plays at y<0 and hits toward +y */

@@ -4,6 +4,7 @@ import { predictFirstBounce, stepBall, cloneBall, BallState } from '../src/match
 import { SURFACES } from '../src/data/surfaces';
 import { flatStats } from '../src/data/types';
 import { Rng } from '../src/core/rng';
+import { shotInput } from './shot-input';
 
 const from: BallState = { x: 0.5, y: -11.5, z: 0.9, vx: 0, vy: 0, vz: 0, spin: 0, side: 0 };
 
@@ -58,28 +59,24 @@ describe('surfaces and spin', () => {
   });
 });
 
-describe('shot model grades', () => {
-  const base = (over: Partial<ShotInput>): ShotInput => ({
-    type: 'normal', from, dir: 1, aimX: 0, aimDepth: 0, grade: 'GOOD', offset: 0, stats: flatStats(70), stamina: 100,
-    speedRatio: 0, stretch: 0, contactZ: 0.9, lateral: 0.8, sideSign: 1, fh: true, volley: false, overhead: false,
-    isReturn: false, badges: [], rng: new Rng(3), ...over,
-  });
-  it('PERFECT is faster than GOOD; EARLY lands deeper; LATE pulls wide', () => {
+describe('shot model (M21 preparation)', () => {
+  const base = (over: Partial<ShotInput>): ShotInput => shotInput({ from, stats: flatStats(70), contactZ: 0.9, ...over });
+  it('a prepared strike is faster, deeper and tighter than a last-moment one', () => {
     const sf = SURFACES.hard;
-    const avg = (g: ShotInput['grade'], offset: number) => {
-      let sp = 0, by = 0, bx = 0;
-      for (let i = 0; i < 40; i++) {
-        const o = makeShot(base({ grade: g, offset, rng: new Rng(i + 1), aimX: 0.0 }), sf);
+    const avg = (prep: number) => {
+      let sp = 0, by = 0, spread = 0;
+      for (let i = 0; i < 60; i++) {
+        const o = makeShot(base({ prep, rng: new Rng(i + 1) }), sf);
         sp += Math.hypot(o.ball.vx, o.ball.vy);
         const f = predictFirstBounce(o.ball, sf, 600, false);
         by += f.by;
-        bx += f.bx;
+        spread += Math.abs(f.bx);
       }
-      return { sp: sp / 40, by: by / 40, bx: bx / 40 };
+      return { sp: sp / 60, by: by / 60, spread: spread / 60 };
     };
-    const p = avg('PERFECT', 0), g = avg('GOOD', 0), e = avg('EARLY', 10), l = avg('LATE', -9);
-    expect(p.sp).toBeGreaterThan(g.sp * 1.08);
-    expect(e.by).toBeGreaterThan(g.by + 1);
-    expect(l.bx).toBeGreaterThan(g.bx + 1);
+    const ready = avg(1.0), late = avg(0.05);
+    expect(ready.sp).toBeGreaterThan(late.sp * 1.04);
+    expect(ready.by).toBeGreaterThan(late.by + 0.5);
+    expect(late.spread).toBeGreaterThan(ready.spread * 2);
   });
 });

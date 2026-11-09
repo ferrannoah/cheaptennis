@@ -5,13 +5,37 @@ import { BallState, stepBall, cloneBall, predictFirstBounce } from './ball';
 import { Player } from './player';
 import { AI, DIFF_NOISE } from './ai';
 import { Score, MatchFormat, ScoreEvent } from './scoring';
-import { makeShot, makeServe, solveShot, Grade } from './shots';
+import { makeShot, makeServe, solveShot, Grade, planStrike, ShotInput, serveTarget, serveZone } from './shots';
 import { Surface, SURFACES, SurfaceId } from '../data/surfaces';
 import { PlayerSetup, ShotType, ServeType, Stats, STAT_KEYS } from '../data/types';
 import { HALF_LEN, HALF_W, SERVICE_Y, BALL_R } from '../data/court';
 import { T } from '../data/tuning';
 import { TacticId, normalize, ARCHETYPE_BLEND } from '../data/tactics';
 import type { Venue } from '../data/venues';
+import {
+  STRIKES, StrikeId, ServeForce, ControlMode, strikeFrom, serveFrom, aimRate, stepAim, dangerOf, dangerClass, centreOf, Zone,
+  SHOULDER_STYLE, JUMP_STYLE,
+} from './strike';
+import type { GestureKind } from './player';
+
+/** (M21) how human players' strikes behave */
+export interface ControlOpts {
+  mode: ControlMode;
+  autoPos: 'slow' | 'average' | 'fast';
+}
+
+/** the incoming ball's path after its bounce, for auto-positioning and the danger-zone HUD */
+export interface BallRead {
+  /** after-bounce samples on the receiver's side: position, height, vertical speed, danger 0..1 */
+  samples: { x: number; y: number; z: number; vz: number; d: number; f: number }[];
+  /** the two green spots (forehand side, backhand side) where the player should stand */
+  spots: { x: number; y: number; fh: boolean }[];
+  /** auto-positioning target */
+  pick: { x: number; y: number } | null;
+  volley: boolean;
+  at: number;
+  forShot: number;
+}
 
 export interface MatchConfig {
   surface: SurfaceId;
@@ -25,6 +49,8 @@ export interface MatchConfig {
   practice?: PracticeFeed | null;
   /** stadium look (cosmetic): theme, tier, how far into the event */
   venue?: Venue;
+  /** human strike settings (default Arcade + fast auto-positioning) */
+  controls?: ControlOpts;
 }
 
 export interface PracticeFeed {
@@ -40,9 +66,13 @@ export interface PracticeFeed {
 }
 
 export type MatchEvent =
-  | { t: 'hit'; p: 0 | 1; grade: Grade; reason: string; shot: ShotType; volley: boolean; overhead: boolean; pace: number; dive: boolean; fh: boolean; cy: number; tx: number }
+  | {
+    t: 'hit'; p: 0 | 1; grade: Grade; reason: string; shot: ShotType; strike: StrikeId; volley: boolean; overhead: boolean; pace: number; dive: boolean; fh: boolean; cy: number; tx: number;
+    prep: number; danger: Zone; centre: Zone; zone: number; accelOver: number;
+  }
   | { t: 'whiff'; p: 0 | 1; reason: string }
-  | { t: 'serve'; p: 0 | 1; kmh: number; grade: Grade; type: ServeType }
+  | { t: 'serve'; p: 0 | 1; kmh: number; grade: Grade; type: ServeType; force: ServeForce }
+  | { t: 'gesture'; p: 0 | 1; kind: GestureKind }
   | { t: 'toss'; p: 0 | 1 }
   | { t: 'bounce'; x: number; y: number; speed: number }
   | { t: 'net' }
@@ -75,7 +105,12 @@ export class Match {
   rng: Rng;
   events: MatchEvent[] = [];
   serveFaults = 0;
-  rally = { lastHitter: -1 as -1 | 0 | 1, bounces: 0, shotCount: 0, isServe: false, firstBounceIn: false, dead: false, rallyLen: 0, bounceX: 0, bounceY: 0 };
+  rally = { lastHitter: -1 as -1 | 0 | 1, bounces: 0, shotCount: 0, isServe: false, firstBounceIn: false, dead: false, rallyLen: 0, bounceX: 0, bounceY: 0, bounceVz: 0 };
+  controls: ControlOpts;
+  /** cached reads of the incoming ball per player */
+  reads: [BallRead | null, BallRead | null] = [null, null];
+  /** (M21) centring icon after a human's error: shows how the missed ball was struck */
+  missIcon: { p: 0 | 1; zone: Zone; body: boolean; t: number } | null = null;
   predicted: { x: number; y: number } | null = null;
   /** trail of recent ball positions for rendering */
   trail: { x: number; y: number; z: number }[] = [];
@@ -94,6 +129,7 @@ export class Match {
 
   constructor(public cfg: MatchConfig) {
     this.sf = SURFACES[cfg.surface];
+    this.controls = cfg.controls ?? { mode: 'arcade', autoPos: 'fast' };
     this.rng = new Rng(cfg.seed ?? 1234);
     this.practice = cfg.practice ?? null;
     this.score = new Score(cfg.format, cfg.firstServer ?? 0);
@@ -163,12 +199,18 @@ export class Match {
       p.recover = 0;
       p.lock = 'none';
       p.serve = { phase: 'ready', t: 0, tossApex: 34, type: 'flat' };
-      p.meterA = -1;
+      p.strike.since = this.frame;
+      p.strike.aim = 0;
+      p.accelUsed = 0;
+      p.smoke = 0;
+      p.autoT = null;
+      p.gesture = null;
     }
+    this.reads = [null, null];
     this.ais.forEach((a) => a?.reset());
     this.ballLive = false;
     this.ballVisible = false;
-    this.rally = { lastHitter: -1, bounces: 0, shotCount: 0, isServe: false, firstBounceIn: false, dead: false, rallyLen: 0, bounceX: 0, bounceY: 0 };
+    this.rally = { lastHitter: -1, bounces: 0, shotCount: 0, isServe: false, firstBounceIn: false, dead: false, rallyLen: 0, bounceX: 0, bounceY: 0, bounceVz: 0 };
     this.predicted = null;
     this.trail.length = 0;
     this.bigPoint = this.score.isBigPoint();
@@ -196,9 +238,12 @@ export class Match {
       if (p.recover > 0) p.recover--;
       if (p.celebrate > 0) p.celebrate--;
       if (p.splitStep > 0) p.splitStep--;
-      if (p.meterShow > 0) p.meterShow--;
+      if (p.smoke > 0) p.smoke--;
+      if (p.gesture) p.gesture.t++;
       p.sweat = p.staminaF() < 0.35 ? 1 : 0;
     }
+    if (this.missIcon && ++this.missIcon.t > 150) this.missIcon = null;
+    this.updateGestures();
     this.trySkipDowntime();
     switch (this.phase) {
       case 'intro':
@@ -256,7 +301,7 @@ export class Match {
 
   private trySkipDowntime(): void {
     if (!this.canSkipDowntime) return;
-    if (!this.players.some((p) => p.ctrl?.pressed('normal'))) return;
+    if (!this.players.some((p) => p.ctrl?.strikePressed())) return;
     if (this.phase === 'dead') {
       this.phaseT = Math.max(this.phaseT, this.deadAction === 'point' ? 80 : 55);
       this.updateDead();
@@ -303,6 +348,12 @@ export class Match {
   }
 
   // ---------------------------------------------------------- serve phase
+  /**
+   * (M21) Press a strike button to toss and keep holding it: contact is automatic at the top of the
+   * toss. What is held at contact picks the serve (B1 Normal, B2 Safe, both Strong; â†‘ slice, â†“ kick),
+   * and left/right sweeps the aim. Releasing just before contact still serves (with what was held
+   * last) and leaves the server free to run in at once.
+   */
   private updateServe(): void {
     const s = this.server;
     const r = this.receiver;
@@ -313,53 +364,53 @@ export class Match {
     }
     const sv = s.serve;
     sv.t++;
-    // receiver can shuffle
+    // receiver can shuffle (or hold a button to auto-position as soon as the serve is struck)
     this.controlReceiverPreServe(r);
     let toss = false;
-    let hit = false;
-    let type: ServeType = 'flat';
-    let aimX = 0;
     let mx = 0;
     const ai = this.ais[s.idx];
+    let holding = false;
+    let aimTarget = 0;
+    let b1 = false, b2 = false, fwd = 0;
     if (ai) {
       const a = ai.serveUpdate(this, s);
       toss = a.toss;
-      hit = a.hit;
-      type = a.type;
-      aimX = a.aimX;
+      if (sv.phase === 'toss' || toss) {
+        holding = true;
+        ({ b1, b2, fwd } = a.buttons);
+        aimTarget = a.aimX;
+      }
     } else if (s.ctrl) {
       const c = s.ctrl;
       const ax = c.axis();
-      mx = ax.x;
-      aimX = ax.x;
+      const bt = c.strikeButtons();
+      b1 = bt.b1;
+      b2 = bt.b2;
+      holding = b1 || b2;
+      fwd = Math.abs(ax.y) > 0.4 ? Math.sign(-ax.y * s.dir) : 0;
+      aimTarget = ax.x > 0.3 ? T.aimMax : ax.x < -0.3 ? -T.aimMax : 0;
+      if (!holding) mx = ax.x;
       if (this.frame < this.skipLockUntil) {
         // the skip press must not also start the toss
-      } else if (sv.phase === 'ready' && (c.pressed('normal') || c.pressed('topspin') || c.pressed('slice'))) toss = true;
-      else if (sv.phase === 'toss' && sv.t > 3) {
-        if (c.pressed('normal')) {
-          hit = true;
-          type = c.held('topspin') ? 'kick' : c.held('slice') ? 'slice' : 'flat';
-        } else if (c.pressed('topspin')) {
-          hit = true;
-          type = 'kick';
-        } else if (c.pressed('slice')) {
-          hit = true;
-          type = 'slice';
-        }
-      }
+      } else if (sv.phase === 'ready' && c.strikePressed()) toss = true;
     }
     if (sv.phase === 'ready') {
       // small sideways adjustment along the baseline
       if (mx !== 0) {
         const base = (s.side === 0 ? 1 : -1) * (this.score.deuceCourt ? 1 : -1);
-        s.x = Math.max(Math.min(base * 0.3, base * 3), Math.min(Math.max(base * 0.3, base * 3), s.x + mx * 0.04));
-        s.x = base > 0 ? Math.max(0.3, Math.min(3.0, s.x)) : Math.min(-0.3, Math.max(-3.0, s.x));
+        s.x = base > 0 ? Math.max(0.3, Math.min(3.0, s.x + mx * 0.04)) : Math.min(-0.3, Math.max(-3.0, s.x + mx * 0.04));
       }
       this.ballVisible = true;
       this.placeBallInHand(s);
       if (toss) {
         sv.phase = 'toss';
         sv.t = 0;
+        sv.held = 0;
+        sv.b1 = b1 || !b2;
+        sv.b2 = b2;
+        sv.fwd = fwd;
+        sv.free = false;
+        s.strike.aim = 0;
         s.anim = 'serve';
         s.animT = 0;
         const hand = this.tossHand(s);
@@ -368,24 +419,36 @@ export class Match {
         this.emit({ t: 'toss', p: s.idx });
       }
     } else if (sv.phase === 'toss') {
+      // latch what is held; sweep the aim
+      if (holding && !s.strike.held) s.strike.since = this.frame;
+      s.strike.held = holding;
+      if (holding) {
+        sv.b1 = b1;
+        sv.b2 = b2;
+        sv.fwd = fwd;
+        sv.held = (sv.held ?? 0) + 1;
+      }
+      s.strike.aim = stepAim(s.strike.aim, aimTarget, 1 / T.serveAimSweep);
       // toss flight (vertical only)
       this.ball.vz -= 9.81 / 60;
       this.ball.z += this.ball.vz / 60;
-      if (hit) {
-        this.hitServe(s, type, aimX);
+      if (sv.t >= sv.tossApex) {
+        const pick = serveFrom(!!sv.b1, !!sv.b2, sv.fwd ?? 0);
+        sv.free = !holding && !ai;
+        this.hitServe(s, pick.spin, pick.force, s.strike.aim, (sv.held ?? 0) / 60);
         return;
-      }
-      if (this.ball.z < 1.25 && this.ball.vz < 0) {
-        // let it drop: re-toss
-        sv.phase = 'ready';
-        sv.t = 0;
-        s.anim = 'idle';
       }
     }
   }
 
   private controlReceiverPreServe(r: Player): void {
     if (r.ctrl) {
+      const bt = r.ctrl.strikeButtons();
+      // holding a strike button before the serve: wait, auto-positioning starts when it is struck
+      if (bt.b1 || bt.b2) {
+        r.move(0, 0, this.sf, false);
+        return;
+      }
       const ax = r.ctrl.axis();
       r.move(ax.x * 0.6, ax.y * 0.4, this.sf, false);
     }
@@ -402,19 +465,26 @@ export class Match {
     this.ball = { x: h.x - (s.side === 0 ? 1 : -1) * 0.25, y: h.y - s.dir * 0.2, z: 1.0, vx: 0, vy: 0, vz: 0, spin: 0, side: 0 };
   }
 
-  private hitServe(s: Player, type: ServeType, aimX: number): void {
+  /** where a serve is aimed and how big its zone is, for the HUD preview */
+  servePreview(s: Player): { tx: number; ty: number; r: number } | null {
     const sv = s.serve;
-    const off = sv.t - sv.tossApex;
-    const a = Math.abs(off);
-    const q = a <= T.servePerfectWin ? 'PERFECT' : a <= T.serveGoodWin ? 'GOOD' : off < 0 ? 'EARLY' : 'LATE';
+    if (sv.phase !== 'toss') return null;
+    const pick = serveFrom(!!sv.b1, !!sv.b2, sv.fwd ?? 0);
+    const t = serveTarget(s.x, s.strike.aim, pick.spin, pick.force, s.dir);
+    return { tx: t.tx, ty: t.ty, r: serveZone(s.stats.serve, pick.force, this.serveFaults > 0, (sv.held ?? 0) / 60 + Math.max(0, sv.tossApex - sv.t) / 60) };
+  }
+
+  private hitServe(s: Player, type: ServeType, force: ServeForce, aimX: number, prep: number): void {
+    const sv = s.serve;
     sv.phase = 'hit';
     sv.t = 0;
     sv.type = type;
     s.animT = 0;
     const from = cloneBall(this.ball);
+    const second = this.serveFaults > 0;
     const res = makeServe({
-      from, dir: s.dir, serverX: s.x, aimX, type, quality: q, tossOffset: off, stats: s.stats, stamina: s.stamina,
-      badges: s.setup.badges, second: this.serveFaults > 0, rng: this.rng,
+      from, dir: s.dir, serverX: s.x, aimX, type, force, prep, stats: s.stats, stamina: s.stamina,
+      badges: s.setup.badges, second, rng: this.rng,
     }, this.sf);
     this.ball = res.ball;
     this.ballLive = true;
@@ -425,20 +495,21 @@ export class Match {
     this.rally.isServe = true;
     this.rally.bounces = 0;
     this.rally.shotCount++;
-    s.drain(T.shotDrain * (type === 'flat' ? 1.3 : 1));
-    if (q === 'PERFECT') {
-      s.perfects++;
-      this.trailOn = 50;
-      this.hitstop = 2;
-    }
+    // a strong second serve is as tiring as an acceleration
+    s.drain(T.shotDrain * (force === 'strong' ? 1.3 : 1) + (force === 'strong' && second ? T.accelPowerDrain : 0));
+    const grade: Grade = force === 'strong' ? 'PERFECT' : force === 'safe' ? 'SAFE' : 'GOOD';
+    if (force === 'strong') this.trailOn = 50;
     this.predicted = (() => {
       const f = predictFirstBounce(this.ball, this.sf);
       return { x: f.bx, y: f.by };
     })();
-    this.emit({ t: 'serve', p: s.idx, kmh: res.speed, grade: q, type });
+    s.strike.aim = 0;
+    s.strike.since = this.frame;
+    this.emit({ t: 'serve', p: s.idx, kmh: res.speed, grade, type, force });
     this.ais[s.idx]?.onServeHit(this, s);
     const r = this.receiver;
     r.splitStep = 12;
+    r.strike.since = Math.max(r.strike.since, this.frame - 30); // a return can't be "prepared" for longer than the read
     this.setPhase('rally');
   }
 
@@ -451,13 +522,16 @@ export class Match {
     if (this.ballLive || this.ballVisible) this.updateBall();
   }
 
+  /**
+   * (M21) One frame of a player. No strike button: run freely. Holding one: auto-position toward the
+   * ideal spot while left/right sweeps the aim and up/down picks the strike. The swing starts on its
+   * own when the ball is a windup away, and contact happens whatever is held (nothing = safe strike).
+   */
   private updatePlayer(p: Player): void {
     let mx = 0;
     let my = 0;
-    let press: ShotType | null = null;
-    let aimX = 0;
-    let aimDepth = 0;
-    let power = 1;
+    let b1 = false, b2 = false, fwd = 0;
+    let aimTarget = 0;
     const ai = this.ais[p.idx];
     if (p.serve.phase === 'hit' && p.serve.t < 30) {
       p.serve.t++;
@@ -470,26 +544,31 @@ export class Match {
       const o = ai.update(this, p);
       mx = o.mx;
       my = o.my;
-      press = o.press;
-      aimX = o.aimX;
-      aimDepth = o.aimDepth;
-      power = o.power;
+      if (o.hold) ({ b1, b2, fwd } = o.hold);
+      aimTarget = o.aimX;
+      p.swingPower = o.power;
     } else if (p.ctrl) {
       const ax = p.ctrl.axis();
       mx = ax.x;
       my = ax.y;
-      press = p.ctrl.shotPressed();
-      aimX = ax.x;
-      aimDepth = -ax.y * p.dir;
+      ({ b1, b2 } = p.ctrl.strikeButtons());
+      fwd = Math.abs(ax.y) > 0.4 ? Math.sign(-ax.y * p.dir) : 0;
+      aimTarget = ax.x > 0.3 ? T.aimMax : ax.x < -0.3 ? -T.aimMax : 0;
+      p.swingPower = 1;
     }
-    if (press) {
-      p.bufferedShot = press;
-      p.bufferT = 5;
-      p.swingPower = power;
-      if (ai) p.aiAim = { x: aimX, d: aimDepth };
+    const holding = b1 || b2;
+    // strike state: preparation counts from the press; the aim sweeps while held, drifts back when released
+    const st = p.strike;
+    if (holding && !st.held) st.since = this.frame;
+    st.held = holding;
+    if (holding) {
+      st.b1 = b1;
+      st.b2 = b2;
+      st.fwd = fwd;
     }
-    if (p.bufferT > 0) p.bufferT--;
-    this.aimHint[p.idx] = { x: aimX, d: aimDepth };
+    const rate = aimRate(Math.abs(p.y));
+    st.aim = stepAim(st.aim, ai ? aimTarget : holding ? aimTarget : 0, rate);
+
     const swinging = !!p.swing && !p.swing.done;
     const wasLocked = p.lock !== 'none';
     const locked = this.strokeLocked(p);
@@ -505,30 +584,26 @@ export class Match {
     } else if (!locked) p.lock = 'none';
     if (p.lock === 'slide') p.brake(T.slideDecel * this.sf.grip * (this.sf.slides ? 0.75 : 1));
     else if (p.lock === 'plant') p.brake(T.plantDecel * this.sf.grip);
-    else p.move(mx, my, this.sf, swinging);
+    else if (holding) {
+      this.autoPosition(p, ai ? T.aiAutoPos : T.autoPosSpeed[this.controls.autoPos]);
+      mx = 0;
+    } else {
+      p.autoT = null;
+      p.move(mx, my, this.sf, swinging);
+    }
     if (p.stepAcc > 0.9) {
       p.stepAcc = 0;
       this.emit({ t: 'step', p: p.idx, slide: false });
     }
     // clay slide when changing direction fast
-    if (this.sf.slides && Math.hypot(p.vx, p.vy) > 4 && (Math.sign(mx) !== Math.sign(p.vx) || mx === 0)) {
+    if (this.sf.slides && !holding && Math.hypot(p.vx, p.vy) > 4 && (Math.sign(mx) !== Math.sign(p.vx) || mx === 0)) {
       if (p.slideT <= 0) this.emit({ t: 'step', p: p.idx, slide: true });
       p.slideT = 20;
     }
     if (p.slideT > 0) p.slideT--;
-    // timing meter prediction for humans
-    if (p.human || this.practice) this.updateMeter(p);
-    // swing handling
-    if (p.bufferedShot && p.bufferT > 0 && !swinging && p.recover <= 0) {
-      this.startSwing(p, p.bufferedShot, aimX, aimDepth);
-      p.bufferedShot = null;
-      p.bufferT = 0;
-    }
-    if (p.swing && !p.swing.done && this.frame >= p.swing.contactAt) {
-      // humans aim with the direction held at contact; the AI uses the aim it chose when it swung
-      if (ai) this.resolveContact(p, p.aiAim.x, p.aiAim.d, true);
-      else this.resolveContact(p, aimX, aimDepth, false);
-    }
+    // swing handling: automatic
+    if (!p.swing && p.recover <= 0) this.maybeStartSwing(p);
+    if (p.swing && !p.swing.done && this.frame >= p.swing.contactAt) this.resolveContact(p, !!ai);
     if (p.swing && p.swing.done && this.frame - p.swing.contactAt > T.swingRecover) p.swing = null;
     // animation state
     if (!p.swing) p.anim = Math.hypot(p.vx, p.vy) > 0.6 ? 'run' : p.staminaF() < 0.2 ? 'slump' : 'idle';
@@ -536,15 +611,15 @@ export class Match {
 
   /**
    * Stroke commitment (M20): no steering from the first frame of the swing animation until the
-   * follow-through is done, and briefly after the serve.
+   * follow-through is done, and briefly after the serve (unless the button was released before it).
    */
   strokeLocked(p: Player): boolean {
-    if (p.serve.phase === 'hit' && p.serve.t < T.serveLock) return true;
+    if (p.serve.phase === 'hit' && p.serve.t < T.serveLock && !p.serve.free) return true;
     const sw = p.swing;
     return !!sw && this.frame >= sw.start && this.frame <= sw.contactAt + T.followLock;
   }
 
-  private incomingFor(p: Player): boolean {
+  incomingFor(p: Player): boolean {
     return this.ballLive && !this.rally.dead && this.rally.lastHitter !== p.idx && this.rally.lastHitter !== -1;
   }
 
@@ -576,101 +651,196 @@ export class Match {
     return null;
   }
 
-  private updateMeter(p: Player): void {
-    const a = this.predictArrival(p, 70);
-    if (a && a.f > -12) {
-      p.meterA = a.f;
-      p.meterShow = 30;
-    } else p.meterA = -1;
+  /**
+   * (M21) Read the incoming ball for a player: its path after the bounce with the danger zone along it,
+   * and the two green spots (forehand / backhand) where contact comes at the top of the bounce at a
+   * comfortable height. Cached for a few frames.
+   */
+  readBall(p: Player): BallRead | null {
+    if (!this.incomingFor(p)) return null;
+    const c = this.reads[p.idx];
+    if (c && c.forShot === this.rally.shotCount && this.frame - c.at < 4) return c;
+    const dir = p.dir;
+    const b = cloneBall(this.ball);
+    let bounces = this.rally.bounces;
+    let vz0 = bounces >= 1 ? this.rally.bounceVz : 0;
+    const samples: BallRead['samples'] = [];
+    const canVolley = !this.rally.isServe && bounces === 0 && Math.abs(p.y) < T.volleyZoneY;
+    const plane = p.y + dir * T.contactAhead;
+    let volleyAt: { x: number; y: number; z: number } | null = null;
+    if (bounces === 1) samples.push({ x: b.x, y: b.y, z: b.z, vz: b.vz, d: dangerOf(b.vz, vz0, Math.hypot(b.vx, b.vy)), f: 0 });
+    for (let f = 1; f <= 160; f++) {
+      const ev = stepBall(b, this.sf);
+      if (ev === 'net') break;
+      if (ev === 'bounce') {
+        bounces++;
+        if (bounces === 1) vz0 = b.vz;
+      }
+      if (bounces >= 2) break;
+      if (b.y * dir > -0.3) continue;
+      if (canVolley && bounces === 0 && !volleyAt && (b.y - plane) * dir <= 0 && b.z > 0.3 && b.z < 2.6) volleyAt = { x: b.x, y: b.y, z: b.z };
+      if (bounces === 1 && f % 2 === 0) samples.push({ x: b.x, y: b.y, z: b.z, vz: b.vz, d: dangerOf(b.vz, vz0, Math.hypot(b.vx, b.vy)), f });
+    }
+    // the green point: first sample past the danger at a comfortable height
+    let g = samples.find((s) => s.d <= T.dangerOrange && s.z >= 0.45 && s.z <= 1.75) ?? null;
+    if (!g) {
+      const calm = samples.filter((s) => s.d <= T.dangerOrange);
+      g = calm.length ? calm.reduce((a, s) => (Math.abs(s.z - 1) < Math.abs(a.z - 1) ? s : a)) : samples[samples.length - 1] ?? null;
+    }
+    const fs = (p.side === 0 ? 1 : -1) * (p.setup.hand === 'R' ? 1 : -1);
+    const lFh = T.idealLat1H;
+    const lBh = p.setup.twoHanded ? T.idealLat2H : T.idealLat1H;
+    const spots: BallRead['spots'] = [];
+    const at = volleyAt ?? g;
+    if (at) {
+      const y = volleyAt ? p.y : at.y - dir * T.contactAhead;
+      const clampX = (x: number) => Math.max(-7.6, Math.min(7.6, x));
+      spots.push({ x: clampX(at.x - fs * lFh), y, fh: true }, { x: clampX(at.x + fs * lBh), y, fh: false });
+    }
+    let pick: { x: number; y: number } | null = null;
+    if (spots.length) {
+      const d0 = Math.hypot(spots[0].x - p.x, spots[0].y - p.y);
+      const d1 = Math.hypot(spots[1].x - p.x, spots[1].y - p.y);
+      pick = d0 <= d1 + 0.15 ? spots[0] : spots[1];
+    }
+    const r: BallRead = { samples, spots, pick, volley: !!volleyAt, at: this.frame, forShot: this.rally.shotCount };
+    this.reads[p.idx] = r;
+    return r;
   }
 
-  private startSwing(p: Player, type: ShotType, aimX: number, aimDepth: number): void {
-    const arr = this.predictArrival(p);
-    const W = T.windup;
-    p.anim = 'swing';
-    p.animT = 0;
-    if (!arr) {
-      p.swing = { type, start: this.frame, contactAt: this.frame + W, grade: null, offset: 0, whiff: true, whiffReason: '', done: false, fh: p.facingFh, kind: 'ground', reach: 0 };
-      p.meterMark = null;
+  /** holding a strike button: walk to the ideal spot at the auto-positioning speed */
+  private autoPosition(p: Player, speed: number): void {
+    const ai = this.ais[p.idx];
+    let tgt: { x: number; y: number } | null = null;
+    if (ai?.plan) tgt = { x: ai.plan.tx, y: ai.plan.ty };
+    else tgt = this.readBall(p)?.pick ?? null;
+    p.autoT = tgt;
+    if (!tgt) {
+      p.move(0, 0, this.sf, false);
       return;
     }
-    const offset = arr.f - W;
-    const wm = p.windowMul() * (this.bigPoint && p.setup.badges.includes('clutch') ? 1.25 : 1);
-    const running = p.speedRatio(this.sf) > 0.5 ? 0.85 : 1;
-    const k = wm * running;
-    const pw = T.perfectWin * k;
-    const gw = T.goodWin * k;
-    let grade: Grade | null;
-    let whiffReason = '';
-    if (Math.abs(offset) <= pw) grade = 'PERFECT';
-    else if (Math.abs(offset) <= gw) grade = 'GOOD';
-    else if (offset > 0 && offset <= T.earlyMax) grade = 'EARLY';
-    else if (offset < 0 && -offset <= T.lateMax) grade = 'LATE';
-    else if (offset > 0 && offset <= T.mishitEarly) grade = 'MISHIT';
-    else if (offset < 0 && -offset <= T.mishitLate) grade = 'MISHIT';
-    else {
-      grade = null;
-      whiffReason = offset > 0 ? 'swung far too early' : 'far too late';
+    const dx = tgt.x - p.x;
+    const dy = tgt.y - p.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 0.03) {
+      p.move(0, 0, this.sf, false);
+      return;
     }
-    p.meterMark = offset;
-    p.meterShow = 50;
+    const v = Math.min(speed, d * 5);
+    const k = v / Math.max(0.1, p.maxSpeed(this.sf));
+    p.move((dx / d) * k, (-dy / d) * k, this.sf, false);
+  }
+
+  /** the swing starts on its own a windup before the ball reaches the contact plane */
+  private maybeStartSwing(p: Player): void {
+    if (!this.incomingFor(p)) return;
+    const arr = this.predictArrival(p, T.windup + 2);
+    if (!arr || arr.f > T.windup || arr.f < 0) return;
+    // nothing held: groundstrokes still come back (safe strike) but a ball in the air is left alone
+    if (arr.vol && !p.strike.held) return;
+    const lat = Math.abs(arr.x - p.x);
+    if (lat > T.stretchReach * T.diveReachMul * 1.15 + 0.3) return; // hopeless: let it go
+    const st = p.strike;
+    const id: StrikeId = st.held ? strikeFrom(st.b1, st.b2, st.fwd) : 'safe';
     const fh = p.isForehand(arr.x);
     p.facingFh = fh;
-    if (grade === null) {
-      p.swing = { type, start: this.frame, contactAt: this.frame + W, grade: null, offset, whiff: true, whiffReason, done: false, fh, kind: 'ground', reach: 0 };
-      return;
-    }
+    p.anim = 'swing';
+    p.animT = 0;
     const contactAt = this.frame + Math.max(1, Math.round(arr.f));
     p.swing = {
-      type, start: this.frame, contactAt, grade, offset, whiff: false, whiffReason: '', done: false, fh,
+      type: STRIKES[id].shot, strike: id, start: contactAt - T.windup, contactAt, grade: null, offset: 0, whiff: false, whiffReason: '', done: false, fh,
       kind: arr.vol ? (arr.z > T.overheadZ ? 'overhead' : 'volley') : 'ground', reach: 0,
     };
-    // the swing "start" for animation purposes: contact pose happens at contactAt
-    p.swing.start = contactAt - W;
   }
 
-  private resolveContact(p: Player, aimX: number, aimDepth: number, isAi: boolean): void {
+  /** maximum lateral reach right now (a held button lets you stretch, and jump for volleys at the net) */
+  private maxReach(p: Player, volley: boolean, held: boolean): number {
+    const wall = p.setup.badges.includes('wall') ? 1.08 : 1;
+    const netMag = volley && p.setup.badges.includes('netMagnet') ? 1.1 : 1;
+    let r = T.stretchReach * wall * netMag;
+    if (!held) r = Math.min(r, T.reach + T.safeReach);
+    else if (volley && Math.abs(p.y) < T.volleyZoneY) r *= T.diveReachMul * JUMP_STYLE[p.setup.archetype];
+    return r;
+  }
+
+  /** the ShotInput this player would strike with if the ball were met now (HUD preview and contact) */
+  private shotInput(p: Player, isAi: boolean, contact: { x: number; y: number; z: number; vx: number; vy: number; vz: number }, volley: boolean, overhead: boolean, maxReach: number): ShotInput {
+    const st = p.strike;
+    const id: StrikeId = st.held ? strikeFrom(st.b1, st.b2, st.fwd) : 'safe';
+    const lat = Math.abs(contact.x - p.x);
+    const fh = p.isForehand(contact.x);
+    const ideal = fh || !p.setup.twoHanded ? T.idealLat1H : T.idealLat2H;
+    const cen = centreOf(lat, ideal, maxReach);
+    const danger = !volley && this.rally.bounces >= 1 ? dangerOf(contact.vz, this.rally.bounceVz, Math.hypot(contact.vx, contact.vy)) : 0;
+    const backpedal = volley ? Math.max(0, Math.min(1, (-p.vy * p.dir) / Math.max(1, p.maxSpeed(this.sf) * T.backpedalMul))) : 0;
+    return {
+      strike: id, from: { ...this.ball, x: contact.x, y: contact.y, z: contact.z }, dir: p.dir, aimX: st.aim, prep: st.held ? (this.frame - st.since) / 60 : 0,
+      mode: isAi ? 'sim' : this.controls.mode, danger, centre: cen.c, body: cen.body, stats: p.stats, stamina: p.stamina,
+      speedRatio: p.speedRatio(this.sf), runVx: p.vx, stretch: Math.max(0, (lat - T.reach) / Math.max(0.1, maxReach - T.reach)), contactZ: contact.z, contactY: contact.y,
+      ballVz: contact.vz, inSpeed: Math.hypot(contact.vx, contact.vy, contact.vz), lateral: lat, fh, twoHanded: p.setup.twoHanded, volley, overhead,
+      isReturn: this.rally.isServe, badges: p.setup.badges, rng: this.rng, power: p.swingPower, backpedal,
+      accelOver: STRIKES[id].accel ? Math.max(0, p.accelUsed + 1 - p.accelQuota) : 0, shoulderStyle: SHOULDER_STYLE[p.setup.archetype],
+      clutch: this.bigPoint && p.setup.badges.includes('clutch'),
+    };
+  }
+
+  /**
+   * (M21) HUD: where the held strike is aimed and how big its zone is right now, assuming contact
+   * at the auto-positioning spot.
+   */
+  strikePreview(p: Player): { tx: number; ty: number; r: number } | null {
+    if (!p.strike.held || !this.incomingFor(p)) return null;
+    const rd = this.readBall(p);
+    const g = rd?.samples.find((s) => s.d <= T.dangerOrange) ?? null;
+    const cz = g ? { x: g.x, y: g.y, z: g.z, vx: this.ball.vx, vy: this.ball.vy, vz: g.vz } : { x: p.x, y: p.y + p.dir * T.contactAhead, z: 1, vx: this.ball.vx, vy: this.ball.vy, vz: 0 };
+    const volley = !!rd?.volley;
+    const inp = this.shotInput(p, !p.human, cz, volley, false, this.maxReach(p, volley, true));
+    inp.centre = 0;
+    inp.body = false;
+    inp.speedRatio = 0;
+    const pl = planStrike(inp);
+    return { tx: pl.tx, ty: p.dir * pl.depth, r: pl.zone };
+  }
+
+  private resolveContact(p: Player, isAi: boolean): void {
     const sw = p.swing!;
     sw.done = true;
-    if (sw.whiff) {
-      p.recover = T.whiffRecover;
-      this.emit({ t: 'whiff', p: p.idx, reason: sw.whiffReason });
-      return;
-    }
+    const st = p.strike;
     const b = this.ball;
     const plane = p.y + p.dir * T.contactAhead;
     const dx = b.x - p.x;
     const dy = Math.abs(b.y - plane);
     const lat = Math.abs(dx);
-    const wall = p.setup.badges.includes('wall') ? 1.08 : 1;
-    const netMag = sw.kind === 'volley' && p.setup.badges.includes('netMagnet') ? 1.1 : 1;
-    const maxReach = T.stretchReach * wall * netMag;
+    const volley = this.rally.bounces === 0;
+    const maxReach = this.maxReach(p, volley, st.held);
     const inZ = b.z >= T.minContactZ && b.z <= T.maxContactZ + (sw.kind === 'overhead' ? 0.3 : 0);
-    // a late swing can still frame a ball that passed the contact plane up to ~0.1 s ago
+    // a late contact can still frame a ball that passed the contact plane up to ~0.1 s ago
     const passTol = Math.max(1.4, Math.abs(b.vy) * 0.1);
     if (!this.incomingFor(p) || lat > maxReach || dy > passTol || !inZ) {
       p.recover = T.whiffRecover;
-      this.emit({ t: 'whiff', p: p.idx, reason: lat > maxReach ? 'out of reach' : !inZ ? (b.z > T.maxContactZ ? 'too high' : 'too low') : 'missed it' });
+      this.emit({ t: 'whiff', p: p.idx, reason: lat > maxReach ? (st.held || lat > T.stretchReach ? 'out of reach' : 'hold a button to stretch') : !inZ ? (b.z > T.maxContactZ ? 'too high' : 'too low') : 'missed it' });
       return;
     }
-    const stretch = Math.max(0, (lat - T.reach) / (maxReach - T.reach));
+    const inp = this.shotInput(p, isAi, b, volley, volley && b.z > T.overheadZ, maxReach);
+    const S = STRIKES[inp.strike];
+    sw.strike = inp.strike;
+    sw.type = S.shot;
     sw.reach = dx;
-    sw.fh = p.isForehand(b.x);
-    if (stretch > 0.45) {
+    sw.fh = inp.fh;
+    if (inp.stretch > 0.45 && (!volley || st.held)) {
       sw.kind = 'dive';
-      p.drain(T.diveDrain * stretch);
+      p.drain(T.diveDrain * inp.stretch);
       p.anim = 'dive';
     }
-    const volley = this.rally.bounces === 0;
-    const overhead = volley && b.z > T.overheadZ;
-    const isReturn = this.rally.isServe;
-    // hitting a ball in the air while running back (chasing a lob) is awkward
-    const backpedal = volley ? Math.max(0, Math.min(1, (-p.vy * p.dir) / Math.max(1, p.maxSpeed(this.sf) * T.backpedalMul))) : 0;
-    const shot = makeShot({
-      type: sw.type, from: cloneBall(b), dir: p.dir, aimX, aimDepth, grade: sw.grade!, offset: sw.offset,
-      stats: p.stats, stamina: p.stamina, speedRatio: p.speedRatio(this.sf), stretch, contactZ: b.z, lateral: lat,
-      sideSign: Math.sign(dx) || 1, fh: sw.fh, volley, overhead, isReturn, badges: p.setup.badges, rng: this.rng, power: p.swingPower, backpedal,
-    }, this.sf);
+    if (S.accel) {
+      p.accelUsed++;
+      // the racket smokes from the last good acceleration on
+      if (p.accelUsed >= p.accelQuota) p.smoke = T.smokeFrames;
+    }
+    const shot = makeShot(inp, this.sf);
+    sw.grade = shot.label;
+    p.lastCentre = shot.centreZone;
+    p.lastBody = inp.body;
     this.ball = shot.ball;
     this.rally.lastHitter = p.idx;
     this.rally.bounces = 0;
@@ -679,24 +849,51 @@ export class Match {
     this.rally.shotCount++;
     this.rally.rallyLen++;
     p.shots++;
-    p.drain(T.shotDrain + (sw.grade === 'PERFECT' ? T.powerDrain : 0) + (sw.type === 'lob' ? 0.4 : 0));
+    p.drain(T.shotDrain + (S.accel ? T.accelPowerDrain * (1 + (inp.accelOver ?? 0) * 0.3) : 0) + (S.shot === 'lob' ? 0.4 : 0) + (S.id === 'topspin' ? 0.15 : 0));
     if (this.rally.rallyLen > 8) p.drain(T.rallyDrain);
-    if (sw.grade === 'PERFECT') {
+    if (shot.label === 'PERFECT') {
       p.perfects++;
       this.hitstop = T.hitstopPerfect;
       this.trailOn = 45;
     } else if (shot.pace > 26) this.trailOn = 30;
     const f = predictFirstBounce(this.ball, this.sf);
     this.predicted = { x: f.bx, y: f.by };
-    this.emit({ t: 'hit', p: p.idx, grade: sw.grade!, reason: shot.reason, shot: sw.type, volley, overhead, pace: shot.pace, dive: sw.kind === 'dive', fh: sw.fh, cy: b.y, tx: shot.tx });
+    this.emit({
+      t: 'hit', p: p.idx, grade: shot.label, reason: shot.reason, shot: S.shot, strike: inp.strike, volley, overhead: inp.overhead, pace: shot.pace, dive: sw.kind === 'dive',
+      fh: sw.fh, cy: b.y, tx: shot.tx, prep: inp.prep, danger: shot.danger, centre: shot.centreZone, zone: shot.zone, accelOver: inp.accelOver ?? 0,
+    });
+    // a button held on after the stroke prepares the next one from now
+    st.since = this.frame;
+    st.aim = 0;
     const opp = this.players[1 - p.idx];
     opp.splitStep = 12;
-    if (isAi) this.ais[p.idx]?.onOwnShot(this, p, sw.type);
+    if (isAi) this.ais[p.idx]?.onOwnShot(this, p, S.shot);
     if (this.practice) {
       this.practiceHits++;
-      if (sw.grade === 'PERFECT') this.practiceStreak++;
+      if (shot.label === 'PERFECT') this.practiceStreak++;
       else this.practiceStreak = 0;
       this.practiceBest = Math.max(this.practiceBest, this.practiceStreak);
+    }
+  }
+
+  /** after a point: gesture button + a direction */
+  private updateGestures(): void {
+    if (this.phase !== 'dead' && this.phase !== 'over') return;
+    if (this.phase === 'dead' && this.deadAction !== 'point') return;
+    for (const p of this.players) {
+      if (!p.ctrl || !p.ctrl.pressed('gesture')) continue;
+      const won = this.phase === 'over' ? this.score.winner === p.idx : this.pendingResult?.winner === p.idx;
+      const ax = p.ctrl.axis();
+      let d: 'up' | 'down' | 'left' | 'right' = 'up';
+      if (Math.abs(ax.x) > Math.abs(ax.y) && Math.abs(ax.x) > 0.3) d = ax.x < 0 ? 'left' : 'right';
+      else if (ax.y > 0.3) d = 'down';
+      if (p.setup.hand === 'L' && (d === 'left' || d === 'right')) d = d === 'left' ? 'right' : 'left';
+      const kind: GestureKind = won
+        ? ({ up: 'jump', left: 'fist', right: 'rage', down: 'sorry' } as const)[d]
+        : ({ up: 'applaud', left: 'facepalm', right: 'crazy', down: 'throw' } as const)[d];
+      p.gesture = { kind, t: 0 };
+      p.celebrate = 0;
+      this.emit({ t: 'gesture', p: p.idx, kind });
     }
   }
 
@@ -736,6 +933,7 @@ export class Match {
       if (this.rally.bounces === 1) {
         this.rally.bounceX = b.x;
         this.rally.bounceY = b.y;
+        this.rally.bounceVz = b.vz;
         const hp = this.players[hitter];
         const oppSide = b.y * hp.dir > 0;
         if (this.rally.isServe) {
@@ -840,7 +1038,11 @@ export class Match {
     const w = this.players[winner];
     if (how === 'ace') w.aces++;
     if (how === 'winner') w.winners++;
-    if (how === 'out' || how === 'net') loser.errors++;
+    if (how === 'out' || how === 'net') {
+      loser.errors++;
+      // (M21) show how the missed ball was struck: green centred, orange off-centre, red into the body / full stretch
+      if (loser.human && this.rally.lastHitter === loser.idx) this.missIcon = { p: loser.idx, zone: loser.lastCentre, body: loser.lastBody, t: 0 };
+    }
     if (this.rally.rallyLen >= 12) w.longRallyWins++;
     this.pendingResult = { winner, how };
     this.deadAction = 'point';
@@ -872,7 +1074,7 @@ export class Match {
       const s = this.server;
       s.serve = { phase: 'ready', t: 0, tossApex: 34, type: 'flat' };
       this.ballLive = false;
-      this.rally = { lastHitter: -1, bounces: 0, shotCount: this.rally.shotCount, isServe: false, firstBounceIn: false, dead: false, rallyLen: 0, bounceX: 0, bounceY: 0 };
+      this.rally = { lastHitter: -1, bounces: 0, shotCount: this.rally.shotCount, isServe: false, firstBounceIn: false, dead: false, rallyLen: 0, bounceX: 0, bounceY: 0, bounceVz: 0 };
       this.ais.forEach((a) => a?.reset());
       this.setupPoint(false);
       this.setPhase('serve');
@@ -923,7 +1125,7 @@ export class Match {
     if (this.practiceFeedT > 0) {
       // after a shot has played out, the shot button skips the rest of the wait
       const waited = T.practiceAfterShot - this.practiceFeedT;
-      if (this.rally.dead && waited >= T.practiceSkipAfter && this.players[0].ctrl?.pressed('normal')) this.practiceFeedT = 1;
+      if (this.rally.dead && waited >= T.practiceSkipAfter && this.players[0].ctrl?.strikePressed()) this.practiceFeedT = 1;
       this.practiceFeedT--;
       if (this.practiceFeedT === 0) this.feed();
       return;
@@ -945,7 +1147,8 @@ export class Match {
     this.ball = solveShot(from, tx, depth, T0, spin, 0, this.sf, margin);
     this.ballLive = true;
     this.ballVisible = true;
-    this.rally = { lastHitter: 1, bounces: 0, shotCount: this.rally.shotCount + 1, isServe: false, firstBounceIn: false, dead: false, rallyLen: 0, bounceX: 0, bounceY: 0 };
+    this.rally = { lastHitter: 1, bounces: 0, shotCount: this.rally.shotCount + 1, isServe: false, firstBounceIn: false, dead: false, rallyLen: 0, bounceX: 0, bounceY: 0, bounceVz: 0 };
+    this.players[0].accelUsed = 0;
     const f = predictFirstBounce(this.ball, this.sf);
     this.predicted = { x: f.bx, y: f.by };
     this.emit({ t: 'feed' });
@@ -966,6 +1169,7 @@ export class Match {
       pressure: this.score.pressureLabel(),
       setHistory: this.score.setHistory.map((s) => s.join('-')),
       skips: this.skips,
+      missIcon: this.missIcon ? this.missIcon.zone : null,
       canSkip: this.canSkipDowntime,
       walking: this.players.some((p) => p.autoWalk),
       ball: { x: r2(this.ball.x), y: r2(this.ball.y), z: r2(this.ball.z), vx: r2(this.ball.vx), vy: r2(this.ball.vy), vz: r2(this.ball.vz), spin: r2(this.ball.spin) },
@@ -974,8 +1178,11 @@ export class Match {
       rally: { ...this.rally },
       players: this.players.map((p) => ({
         x: r2(p.x), y: r2(p.y), vx: r2(p.vx), vy: r2(p.vy), stamina: r2(p.stamina), anim: p.anim,
-        swing: p.swing ? { grade: p.swing.grade, offset: p.swing.offset, whiff: p.swing.whiff, kind: p.swing.kind, type: p.swing.type } : null,
-        serve: p.serve.phase, meterA: p.meterA, perfects: p.perfects, maxSpeed: r2(p.maxSpeed(this.sf)), windowMul: r2(p.windowMul()),
+        swing: p.swing ? { grade: p.swing.grade, whiff: p.swing.whiff, kind: p.swing.kind, type: p.swing.type, strike: p.swing.strike, contactAt: p.swing.contactAt, done: p.swing.done } : null,
+        strike: { held: p.strike.held, b1: p.strike.b1, b2: p.strike.b2, fwd: p.strike.fwd, prep: p.strike.held ? r2((this.frame - p.strike.since) / 60) : 0, aim: r2(p.strike.aim) },
+        autoT: p.autoT ? { x: r2(p.autoT.x), y: r2(p.autoT.y) } : null, accel: [p.accelUsed, p.accelQuota], smoke: p.smoke, lock: p.lock,
+        gesture: p.gesture?.kind ?? null,
+        serve: p.serve.phase, perfects: p.perfects, maxSpeed: r2(p.maxSpeed(this.sf)), windowMul: r2(p.windowMul()),
       })),
     };
   }

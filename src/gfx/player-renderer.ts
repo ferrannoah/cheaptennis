@@ -75,6 +75,14 @@ export const POSES = {
   dive: pose({ hip: P(0.25, 0.65), head: P(0.55, 1.2), neck: P(0.45, 1.08), sL: P(0.3, 1.05), sR: P(0.58, 1.0), eL: P(0.1, 0.9), hL: P(-0.05, 0.8), eR: P(0.85, 0.95), hR: P(1.1, 0.9), kL: P(-0.2, 0.45), kR: P(0.45, 0.3), fL: P(-0.55, 0.05), fR: P(0.6, 0.02), racket: 1.5, lean: 0.4 }),
   celebrate: pose({ eR: P(0.35, 1.7), hR: P(0.3, 2.0), racket: 0.2, eL: P(-0.35, 1.2), hL: P(-0.25, 1.35) }),
   slump: pose({ head: P(0, 1.42), neck: P(0, 1.3), sL: P(-0.2, 1.25), sR: P(0.2, 1.25), hip: P(0, 0.82), kL: P(-0.18, 0.42), kR: P(0.18, 0.42), eL: P(-0.22, 0.95), hL: P(-0.17, 0.62), eR: P(0.24, 0.95), hR: P(0.2, 0.62), racket: 2.8, lean: 0.15 }),
+  // ---- gestures after a point (M21)
+  gFist: pose({ eL: P(-0.36, 1.62), hL: P(-0.3, 1.9), eR: P(0.3, 1.1), hR: P(0.3, 0.9), racket: 2.9, kL: P(-0.2, 0.46), kR: P(0.2, 0.46), fL: P(-0.3, 0.02), fR: P(0.3, 0.02) }),
+  gRage: pose({ hip: P(0, 0.86), head: P(0.04, 1.56), neck: P(0.03, 1.4), eL: P(-0.34, 1.12), hL: P(-0.3, 0.88), eR: P(0.36, 1.12), hR: P(0.32, 0.88), racket: 3.0, lean: 0.1, kL: P(-0.24, 0.44), kR: P(0.24, 0.44), fL: P(-0.36, 0.02), fR: P(0.36, 0.02) }),
+  gSorry: pose({ eL: P(-0.3, 1.5), hL: P(-0.28, 1.78), eR: P(0.26, 1.1), hR: P(0.24, 0.9), racket: 2.9 }),
+  gApplaud: pose({ eL: P(-0.2, 1.18), hL: P(-0.02, 1.28), eR: P(0.22, 1.18), hR: P(0.04, 1.28), racket: 2.4 }),
+  gFacepalm: pose({ head: P(0.02, 1.62), eL: P(-0.24, 1.0), hL: P(-0.2, 0.8), eR: P(0.3, 1.5), hR: P(0.08, 1.66), racket: -0.4, lean: 0.06 }),
+  gCrazy: pose({ eL: P(-0.42, 1.62), hL: P(-0.5, 1.92), eR: P(0.42, 1.62), hR: P(0.5, 1.92), racket: 0.3, lean: -0.05 }),
+  gThrow: pose({ hip: P(0, 0.88), eL: P(-0.3, 1.25), hL: P(-0.4, 1.3), eR: P(0.3, 1.0), hR: P(0.45, 0.7), racket: 2.0, lean: 0.16, kL: P(-0.12, 0.48), kR: P(0.24, 0.42), fL: P(-0.2, 0.02), fR: P(0.36, 0.02) }),
 } satisfies Record<string, Pose>;
 
 /**
@@ -91,6 +99,7 @@ const DEPTHS: Record<keyof typeof POSES, [number, number]> = {
   lobFollow: [-0.3, -0.5],
   srvToss: [0.6, -0.5], srvTrophy: [1, -0.5], srvContact: [-0.2, -1], srvFollow: [-1, -1],
   volley: [-1, -1], dive: [-0.5, -0.5], celebrate: [-0.2, -0.5], slump: [-0.5, -0.5],
+  gFist: [-0.5, -0.2], gRage: [-0.5, -0.5], gSorry: [-0.5, -0.2], gApplaud: [-1, -1], gFacepalm: [-1, -0.5], gCrazy: [-0.2, -0.2], gThrow: [-0.8, -0.3],
 };
 for (const k of Object.keys(DEPTHS) as (keyof typeof POSES)[]) {
   POSES[k].rDepth = DEPTHS[k][0];

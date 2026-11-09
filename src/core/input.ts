@@ -115,7 +115,11 @@ class InputSystem {
   vpress(id: string, action: Action | MenuAction, frames: number): void {
     let m = this.virtual.get(id);
     if (!m) this.virtual.set(id, (m = new Map()));
-    m.set(action, Math.max(1, frames) | 0x10000);
+    const cur = m.get(action) ?? 0;
+    // extending a key that is still held is not a new press (like holding a real key down)
+    if (cur & 0x10000) m.set(action, Math.max(cur & 0xffff, frames) | 0x10000);
+    else if (cur > 0) m.set(action, Math.max(cur, frames));
+    else m.set(action, Math.max(1, frames) | 0x10000);
   }
   vheld(id: string, a: Action | MenuAction): boolean {
     const m = this.virtual.get(id);
@@ -283,9 +287,15 @@ export class Controller {
     return { x, y };
   }
 
-  shotPressed(): 'normal' | 'topspin' | 'slice' | 'lob' | 'drop' | null {
-    for (const a of ['normal', 'topspin', 'slice', 'lob', 'drop'] as const) if (this.pressed(a)) return a;
-    return null;
+  /** strike buttons held right now (the Accel key counts as both) */
+  strikeButtons(): { b1: boolean; b2: boolean } {
+    const acc = this.held('acc');
+    return { b1: acc || this.held('b1'), b2: acc || this.held('b2') };
+  }
+
+  /** a strike button went down this frame (skips, toss, menus inside a match) */
+  strikePressed(): boolean {
+    return this.pressed('b1') || this.pressed('b2') || this.pressed('acc');
   }
 }
 

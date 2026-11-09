@@ -12,7 +12,7 @@ describe('fatigue panel numbers', () => {
     const dead = fatigueEffects(0.05);
     for (const e of tired) expect(e.delta).toBeLessThanOrEqual(0);
     expect(tired.find((e) => e.label === 'Top speed')!.delta).toBeLessThan(0);
-    expect(tired.find((e) => e.label === 'Timing window')!.delta).toBeLessThan(0);
+    expect(tired.find((e) => e.label === 'Aim zone closing')!.delta).toBeLessThan(0);
     expect(tired.find((e) => e.label === 'Shot accuracy')!.delta).toBeLessThan(0);
     for (let i = 0; i < tired.length; i++) expect(dead[i].delta).toBeLessThanOrEqual(tired[i].delta);
   });
