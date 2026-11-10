@@ -3,7 +3,7 @@
 // plus manifest.json. Browser: $CHROME_PATH if set, else $PW_CHANNEL / Edge, else Playwright's Chromium.
 import { build } from 'esbuild';
 import { chromium } from '@playwright/test';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,12 +34,25 @@ try {
   await page.setContent('<!doctype html><html><body></body></html>');
   await page.addScriptTag({ content: bundle.outputFiles[0].text });
   const { manifest, strips } = await page.evaluate(() => window.__bake());
+  // strips imported from real art (manifest "custom") are kept, with their timing
+  const manPath = join(outDir, 'manifest.json');
+  const old = existsSync(manPath) ? JSON.parse(readFileSync(manPath, 'utf8')) : {};
+  const custom = old.custom ?? [];
+  if (custom.length) {
+    manifest.custom = custom;
+    for (const key of custom) {
+      delete strips[key];
+      const anim = key.split('/')[1];
+      if (old.animations?.[anim]) manifest.animations[anim] = old.animations[anim];
+    }
+    console.log(`kept imported art: ${custom.join(', ')}`);
+  }
   for (const [key, url] of Object.entries(strips)) {
     const file = join(outDir, key + '.png');
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, Buffer.from(url.split(',')[1], 'base64'));
   }
-  writeFileSync(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  writeFileSync(manPath, JSON.stringify(manifest, null, 2) + '\n');
   console.log(`wrote ${Object.keys(strips).length} strips + manifest.json to public/sprites/player/`);
 } finally {
   await browser.close();

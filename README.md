@@ -76,9 +76,24 @@ This runs the browser playtests (they use the installed Microsoft Edge; set `PW_
 
 ## Player sprites
 
-**Options → Player graphics** switches between **DRAWN** (the built-in figure in each player's kit colours) and **SPRITES** (sprite-sheet art from `public/sprites/player/`). The sprites shipped now are placeholders baked from the drawn figure's poses (`npm run sprites:placeholder` regenerates them).
+**Options → Player graphics** switches between **DRAWN** (the built-in figure in each player's kit colours) and **SPRITES** (sprite-sheet art from `public/sprites/player/`). The forehand uses real art (`art/player/forehand.png`). The other animations are placeholders baked from the drawn figure's poses. `npm run sprites:placeholder` regenerates the placeholders and never overwrites imported art.
 
-To use real art, replace the PNGs, keeping the same format:
+To import a generated sheet (one animation per row, frames left to right, with space between them):
+
+```bash
+npm run sprites:import -- art/player/backhand.png --rows front/backhand,back/backhand
+```
+
+The importer:
+- removes the background, white or a painted checkerboard, outside the character's dark outline;
+- finds the rows and frames;
+- scales each row so its first frame (a standing pose) is the right height;
+- puts the feet on the anchor point and writes the strips;
+- marks the strips as real art in `manifest.json` and keeps a copy of the sheet in `art/player/`.
+
+Check that the `contact` frame number in `manifest.json` matches the art.
+
+Strip format (the importer produces this, or replace the PNGs by hand):
 
 - `front/<anim>.png` is the far player, facing the camera. `back/<anim>.png` is the near player, seen from behind. Draw right-handers only: left-handers are mirrored.
 - Each PNG is one horizontal strip of 256×256 cells on a transparent background. The number of frames is the strip width divided by 256, so any count works.
@@ -106,5 +121,5 @@ src/career    rankings, entry rules, weekly field simulation, progression, save
 src/data      tour.ts (all tiers, points, cutoffs, calendar), surfaces, archetypes, tuning, music
 src/scenes    every screen
 tests/        Vitest unit tests     e2e/   Playwright playtests     docs/   GDD + PLAN
-public/sprites/player   player sprite strips + manifest.json     scripts/   placeholder sprite baker
+public/sprites/player   player sprite strips + manifest.json     scripts/   sprite importer + placeholder baker     art/   source sprite sheets
 ```

@@ -88,5 +88,9 @@
       "fps": 6,
       "loop": true
     }
-  }
+  },
+  "custom": [
+    "back/forehand",
+    "front/forehand"
+  ]
 }

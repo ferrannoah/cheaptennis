@@ -69,6 +69,8 @@ export interface SpriteManifest {
   /** standing character height in px, soles to top of head: sets the in-game scale */
   figureHeight: number;
   animations: Partial<Record<AnimName, AnimMeta>>;
+  /** strips ("view/anim") holding real art from npm run sprites:import; the placeholder baker leaves them alone */
+  custom?: string[];
 }
 
 /** How the game wants an animation played this frame. */
