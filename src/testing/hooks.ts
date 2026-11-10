@@ -5,6 +5,7 @@ import { audio } from '../core/audio';
 import type { Action } from '../core/settings';
 import type { MenuAction } from '../core/input';
 import { setAutopilot } from './autopilot';
+import { playerSprites } from '../gfx/sprites';
 
 declare global {
   interface Window {
@@ -73,6 +74,10 @@ export function installHooks(g: Game): void {
       }
       g.draw();
       return st();
+    },
+    /** player sprite bank status (sprite mode) */
+    sprites() {
+      return { state: playerSprites.state, missing: [...playerSprites.missing], drawn: playerSprites.drawn };
     },
     game: g,
   };

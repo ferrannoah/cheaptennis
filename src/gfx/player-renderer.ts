@@ -1,5 +1,5 @@
 import { Camera } from './camera';
-import { Kit } from '../data/types';
+import { Kit, ShotType } from '../data/types';
 
 /** Joint positions in body space (metres, x = player's right as seen on screen for a near player, y up). */
 export interface Pose {
@@ -429,4 +429,51 @@ export function drawShadow(ctx: CanvasRenderingContext2D, cam: Camera, x: number
   ctx.beginPath();
   ctx.ellipse(p.x, p.y, rx * p.s, rx * p.s * 0.45, 0, 0, Math.PI * 2);
   ctx.fill();
+}
+
+/** Ground-stroke key poses: forehand vs (two- or one-handed) backhand, plus slice, drop and lob variants. */
+export function strokePoses(fh: boolean, type: ShotType, twoHanded: boolean): { back: Pose; con: Pose; fol: Pose } {
+  if (type === 'slice' || type === 'drop') {
+    const back = fh ? POSES.fhSliceBack : POSES.bhSliceBack;
+    const con = fh ? POSES.fhSliceContact : POSES.bhSliceContact;
+    const fol = fh ? POSES.fhSliceFollow : POSES.bhSliceFollow;
+    // the drop shot is a short, soft version of the slice
+    if (type === 'drop') return { back: lerpPose(POSES.ready, back, 0.65), con, fol: lerpPose(con, fol, 0.45) };
+    return { back, con, fol };
+  }
+  if (fh) return { back: POSES.fhBack, con: POSES.fhContact, fol: type === 'lob' ? POSES.lobFollow : POSES.fhFollow };
+  if (twoHanded) return { back: POSES.bhBack, con: POSES.bhContact, fol: type === 'lob' ? lerpPose(POSES.bhFollow, POSES.lobFollow, 0.5) : POSES.bhFollow };
+  return { back: POSES.bh1Back, con: POSES.bh1Contact, fol: type === 'lob' ? lerpPose(POSES.bh1Follow, POSES.lobFollow, 0.5) : POSES.bh1Follow };
+}
+
+/**
+ * Slide stroke (M20): keep the arms and racket of the stroke pose, drop the body and split the legs.
+ * `d` is the slide direction in body space (+1 = the figure's +x), `k` 0..1 how deep the slide is.
+ */
+export function slidePose(p: Pose, d: number, k: number): Pose {
+  const drop = 0.17 * k;
+  const o: Pose = { ...p };
+  for (const j of ['head', 'neck', 'sL', 'sR', 'eL', 'eR', 'hL', 'hR'] as const) o[j] = [p[j][0] + d * 0.06 * k, p[j][1] - drop];
+  const lerp = (a: [number, number], b: [number, number]): [number, number] => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+  // lead leg (slide side) bent and sliding; trail leg stretched out behind
+  const lead = d > 0 ? 'R' : 'L';
+  const trail = d > 0 ? 'L' : 'R';
+  o.hip = lerp(p.hip, [p.hip[0] + d * 0.08, p.hip[1] - drop]);
+  o[`k${lead}`] = lerp(p[`k${lead}`], [d * 0.36, 0.4]);
+  o[`f${lead}`] = lerp(p[`f${lead}`], [d * 0.58, 0.03]);
+  o[`k${trail}`] = lerp(p[`k${trail}`], [-d * 0.3, 0.28]);
+  o[`f${trail}`] = lerp(p[`f${trail}`], [-d * 0.66, 0.03]);
+  o.lean = p.lean + d * 0.05 * k;
+  return o;
+}
+
+export function mirrorPose(p: Pose): Pose {
+  const o = {} as Pose;
+  for (const k of Object.keys(p) as (keyof Pose)[]) {
+    const v = p[k];
+    if (typeof v === 'number') (o as any)[k] = k === 'racket' || k === 'lean' ? -v : v;
+    else (o as any)[k] = [-v[0], v[1]];
+  }
+  // swap left/right limbs so the racket hand stays the racket hand
+  return o;
 }

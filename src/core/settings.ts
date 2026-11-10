@@ -44,6 +44,8 @@ export type ControlMode = 'arcade' | 'sim';
 export type AutoPos = 'slow' | 'average' | 'fast';
 /** what the court preview shows: impact marker, + danger zone, + live aiming zone */
 export type Preview = 'off' | 'impact' | 'danger' | 'all';
+/** how players are drawn: the procedural figure, or sprite sheets from public/sprites/player */
+export type PlayerArt = 'drawn' | 'sprites';
 
 export interface Settings {
   version: 1;
@@ -64,6 +66,7 @@ export interface Settings {
   controlMode: ControlMode;
   autoPos: AutoPos;
   preview: Preview;
+  playerArt: PlayerArt;
 }
 
 function defaults(): Settings {
@@ -85,6 +88,7 @@ function defaults(): Settings {
     controlMode: 'arcade',
     autoPos: 'fast',
     preview: 'all',
+    playerArt: 'drawn',
   };
 }
 

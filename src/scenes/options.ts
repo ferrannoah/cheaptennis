@@ -48,6 +48,11 @@ export class OptionsScene extends MenuScene {
         change: (d) => set(() => (settings.preview = cycle(['off', 'impact', 'danger', 'all'] as const, settings.preview, d)))(),
         hint: 'Landing marker, the danger zone with its green spots, and your live aiming zone',
       },
+      {
+        id: 'playerart', label: 'Player graphics', value: settings.playerArt === 'sprites' ? 'SPRITES' : 'DRAWN',
+        change: set(() => (settings.playerArt = settings.playerArt === 'sprites' ? 'drawn' : 'sprites')),
+        hint: 'Drawn: the built-in figure in your kit colours. Sprites: the sprite-sheet art (placeholder for now)',
+      },
       { id: 'difficulty', label: 'COM difficulty', value: settings.difficulty.toUpperCase(), change: (d) => set(() => (settings.difficulty = cycle(DIFFS, settings.difficulty, d)))() },
       { id: 'clen', label: 'Career match length', value: { short: 'First to 3 games', set: '6-game set', full: 'Best of 3 sets' }[settings.careerLength], change: (d) => set(() => (settings.careerLength = cycle(['short', 'set', 'full'] as const, settings.careerLength, d)))() },
       { id: 'bo5', label: 'Majors best of 5', value: settings.majorsBo5 ? 'ON' : 'OFF', change: set(() => (settings.majorsBo5 = !settings.majorsBo5)), hint: 'Only applies when career match length is "Best of 3 sets"' },
@@ -65,9 +70,11 @@ export class OptionsScene extends MenuScene {
     ctx.fillRect(0, 0, W, H);
     text(ctx, 'OPTIONS', W / 2, 34, { size: 30, align: 'center', outline: '#13284a', outlineWidth: 8 });
     const items = this.items();
-    const pw = 460, row = 22;
+    const pw = 460, py = 56;
+    // rows shrink a little when the list grows, so the hint line below stays clear
+    const row = Math.min(22, Math.floor((H - 40 - py - 24) / items.length));
     const ph = items.length * row + 24;
-    const px = (W - pw) / 2, py = 60;
+    const px = (W - pw) / 2;
     panel(ctx, px, py, pw, ph);
     menuList(ctx, items, this.sel, px + 16, py + 24, pw - 32, row, 14, this.t);
     const h = items[this.sel]?.hint;

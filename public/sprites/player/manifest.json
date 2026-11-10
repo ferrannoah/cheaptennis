@@ -1,0 +1,92 @@
+{
+  "cell": [
+    256,
+    256
+  ],
+  "anchor": [
+    128,
+    236
+  ],
+  "figureHeight": 100,
+  "animations": {
+    "ready": {
+      "fps": 6,
+      "loop": true
+    },
+    "run": {
+      "loop": true
+    },
+    "forehand": {
+      "contact": 3
+    },
+    "backhand": {
+      "contact": 3
+    },
+    "backhand1h": {
+      "contact": 3
+    },
+    "fhSlice": {
+      "contact": 3
+    },
+    "bhSlice": {
+      "contact": 3
+    },
+    "fhLob": {
+      "contact": 3
+    },
+    "bhLob": {
+      "contact": 3
+    },
+    "volleyFh": {
+      "contact": 2
+    },
+    "volleyBh": {
+      "contact": 2
+    },
+    "overhead": {
+      "contact": 3
+    },
+    "serve": {
+      "contact": 6
+    },
+    "dive": {
+      "contact": 3
+    },
+    "celebrate": {
+      "fps": 8,
+      "loop": true
+    },
+    "slump": {
+      "fps": 2,
+      "loop": true
+    },
+    "gFist": {
+      "fps": 8,
+      "loop": true
+    },
+    "gRage": {
+      "fps": 8,
+      "loop": true
+    },
+    "gSorry": {
+      "fps": 4,
+      "loop": true
+    },
+    "gApplaud": {
+      "fps": 8,
+      "loop": true
+    },
+    "gFacepalm": {
+      "fps": 4,
+      "loop": true
+    },
+    "gCrazy": {
+      "fps": 10,
+      "loop": true
+    },
+    "gThrow": {
+      "fps": 6,
+      "loop": true
+    }
+  }
+}

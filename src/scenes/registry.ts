@@ -18,6 +18,7 @@ import { OptionsScene, RemapScene } from './options';
 import { TacticsSchool, LessonCard, makeLessonMatch } from './tactics-school';
 import { LESSONS, lessonById } from '../data/lessons';
 import { PoseGallery } from '../testing/pose-gallery';
+import { SpriteGallery } from '../testing/sprite-gallery';
 import { venueFor } from '../data/venues';
 import { CareerMenu } from './career/menu';
 import { CreateScene } from './career/create';
@@ -75,6 +76,7 @@ export function registerScenes(): void {
     tutorial: () => makeTutorial('hard'),
     tactics: () => new TacticsSchool('hard', () => game.goto(new PracticeSetup())),
     posegallery: (p?: { view?: 'back' | 'front'; lefty?: boolean }) => new PoseGallery(p?.view ?? 'back', !!p?.lefty),
+    spritegallery: (p?: { view?: 'back' | 'front'; page?: number }) => new SpriteGallery(p?.view ?? 'back', p?.page ?? 0),
     lesson: (p?: { id?: string; card?: 'intro' | 'done' }) => {
       const l = lessonById(p?.id ?? 'cross') ?? LESSONS[0];
       const back = () => game.goto(new PracticeSetup());

@@ -74,6 +74,19 @@ npx playwright test
 
 This runs the browser playtests (they use the installed Microsoft Edge; set `PW_CHANNEL=chromium` to use Playwright's Chromium). Screenshots are written to `playtest/`.
 
+## Player sprites
+
+**Options → Player graphics** switches between **DRAWN** (the built-in figure in each player's kit colours) and **SPRITES** (sprite-sheet art from `public/sprites/player/`). The sprites shipped now are placeholders baked from the drawn figure's poses (`npm run sprites:placeholder` regenerates them).
+
+To use real art, replace the PNGs, keeping the same format:
+
+- `front/<anim>.png` is the far player, facing the camera. `back/<anim>.png` is the near player, seen from behind. Draw right-handers only: left-handers are mirrored.
+- Each PNG is one horizontal strip of 256×256 cells on a transparent background. The number of frames is the strip width divided by 256, so any count works.
+- In every cell, the feet touch the ground at (128, 236) and a standing player is about 100 px tall. This sets the in-game size.
+- `manifest.json` sets each animation's timing. Strokes, the serve and the dive name their `contact` frame. The game times the wind-up and follow-through around it, so that frame is on screen when the ball is hit. Looping animations (ready, celebrate, gestures) set `fps`. Add `"faces": "right"` (or `"left"`) to a side-on animation such as the run, and it turns to face the way the player is moving.
+- Animation names: `ready run forehand backhand backhand1h fhSlice bhSlice fhLob bhLob volleyFh volleyBh overhead serve dive celebrate slump gFist gRage gSorry gApplaud gFacepalm gCrazy gThrow`. A missing strip falls back to a related one (a missing `bhSlice` plays `backhand`, and anything ends on `ready`). If nothing loads, the drawn figure is used.
+- To check new art, open `?test` and run `__game.goto('spritegallery', { view: 'back', page: 0 })` in the console. It shows every frame, boxes the contact frames, and lists what each missing strip falls back to.
+
 ## Deploying to GitHub Pages
 
 Auto-publishing is set up: every push to `main` runs `.github/workflows/pages.yml`. It runs the unit tests, builds the game and deploys `dist/` to https://ferrannoah.github.io/cheaptennis/. If the tests fail, nothing is deployed. You can watch each run in the repo's **Actions** tab.
@@ -86,11 +99,12 @@ git push
 
 ```
 src/core      loop, input, audio synth + tracker, settings, save, rng
-src/gfx       camera projection, court/stadium, player renderer, HUD, trophies
+src/gfx       camera projection, court/stadium, player renderer + sprites, HUD, trophies
 src/match     3D ball physics, shot model + Elbow strike rules (strike.ts), players, AI, scoring, match flow
 src/sim       stat-based match simulator, brackets
 src/career    rankings, entry rules, weekly field simulation, progression, save
 src/data      tour.ts (all tiers, points, cutoffs, calendar), surfaces, archetypes, tuning, music
 src/scenes    every screen
 tests/        Vitest unit tests     e2e/   Playwright playtests     docs/   GDD + PLAN
+public/sprites/player   player sprite strips + manifest.json     scripts/   placeholder sprite baker
 ```

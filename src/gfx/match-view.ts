@@ -3,7 +3,9 @@ import { Player } from '../match/player';
 import { matchCam, Camera } from './camera';
 import { Layer } from './layer';
 import { drawCourtBackground, drawNet, drawCrowd, makeCrowd, Seat } from './court';
-import { drawFigure, drawShadow, lerpPose, POSES, Pose, smooth, FIGURE_SCALE } from './player-renderer';
+import { drawFigure, drawShadow, lerpPose, POSES, Pose, smooth, FIGURE_SCALE, strokePoses, slidePose, mirrorPose } from './player-renderer';
+
+export { strokePoses, slidePose };
 import { Particles } from './particles';
 import { text, font } from './text';
 import { TacticId } from '../data/tactics';
@@ -15,9 +17,9 @@ import { SURFACES, SurfaceId } from '../data/surfaces';
 import { Grade } from '../match/shots';
 import { prepQ, Zone } from '../match/strike';
 import type { GestureKind } from '../match/player';
-import { ShotType } from '../data/types';
 import { Venue, VenueLook, venueFor, venueKey, venueLook } from '../data/venues';
 import { fatigueEffects } from '../match/fatigue';
+import { AnimRef, AnimName, playerSprites } from './sprites';
 
 /** courtside photographers behind the far baseline (Majors / late rounds) */
 const PHOTOGRAPHERS: [number, number][] = [[-7.6, 18.7], [-5.6, 18.9], [5.4, 18.9], [7.4, 18.7]];
@@ -27,6 +29,10 @@ export const GRADE_COLOR: Record<Grade | 'MISS', string> = {
 };
 const ZONE_COLOR: Record<Zone, string> = { green: '#5fe07a', orange: '#ff9a2e', red: '#ff3b3b' };
 const GESTURE_POSE: Record<GestureKind, keyof typeof POSES> = {
+  jump: 'celebrate', fist: 'gFist', rage: 'gRage', sorry: 'gSorry', applaud: 'gApplaud', facepalm: 'gFacepalm', crazy: 'gCrazy', throw: 'gThrow',
+};
+/** sprite animation per gesture (same names as the poses) */
+const GESTURE_ANIM: Record<GestureKind, AnimName> = {
   jump: 'celebrate', fist: 'gFist', rage: 'gRage', sorry: 'gSorry', applaud: 'gApplaud', facepalm: 'gFacepalm', crazy: 'gCrazy', throw: 'gThrow',
 };
 
@@ -520,8 +526,63 @@ export class MatchView {
     return POSES.ready;
   }
 
+  /**
+   * Sprite mode: which animation plays and where in it, following the same game state and the same
+   * timing as poseFor (wind-up up to contact, 12 ticks of follow-through, 12 back to ready).
+   */
+  spriteAnimFor(p: Player): AnimRef {
+    const m = this.m;
+    const W8 = T.windup;
+    const facing = Math.abs(p.vx) > 0.3 ? Math.sign(p.vx) : 0;
+    if (m.phase === 'serve' && p === m.server && p.serve.phase === 'toss') {
+      // toss → trophy, reaching the contact frame 4 ticks after the toss apex
+      return { name: 'serve', kind: 'once', k: Math.min(0.95, p.serve.t / (p.serve.tossApex + 4)) };
+    }
+    if (p.serve.phase === 'hit' && p.serve.t < 30 && (m.phase === 'rally' || m.phase === 'dead')) {
+      const t = p.serve.t;
+      const k = t < 4 ? (p.serve.tossApex + t) / (p.serve.tossApex + 4) : 1 + (t - 4) / 26;
+      return { name: 'serve', kind: 'once', k };
+    }
+    if (p.swing) {
+      const sw = p.swing;
+      const t = m.frame - sw.start;
+      if (t >= 0 && t < W8 + 24) {
+        const k = t < W8 ? t / W8 : 1 + (t - W8) / 24;
+        if (sw.kind === 'overhead') return { name: 'overhead', kind: 'once', k };
+        if (sw.kind === 'volley') return { name: sw.fh ? 'volleyFh' : 'volleyBh', kind: 'once', k };
+        // one dive strip (to the forehand side), mirrored for the backhand side
+        if (sw.kind === 'dive') return { name: 'dive', kind: 'once', k, flip: !sw.fh };
+        const two = p.setup.twoHanded;
+        let name: AnimName;
+        if (sw.type === 'slice' || sw.type === 'drop') name = sw.fh ? 'fhSlice' : 'bhSlice';
+        else if (sw.type === 'lob') name = sw.fh ? 'fhLob' : 'bhLob';
+        else name = sw.fh ? 'forehand' : two ? 'backhand' : 'backhand1h';
+        return { name, kind: 'once', k };
+      }
+    }
+    if (p.gesture && p.gesture.t < 160 && (m.phase === 'dead' || m.phase === 'over' || m.phase === 'serve')) {
+      return { name: GESTURE_ANIM[p.gesture.kind], kind: 'clock', t: p.gesture.t / 60 };
+    }
+    if (p.celebrate > 0 && (m.phase === 'dead' || m.phase === 'over')) return { name: 'celebrate', kind: 'clock', t: this.time };
+    if (Math.hypot(p.vx, p.vy) > 0.6) return { name: 'run', kind: 'cycle', phase: (p.runPhase * 2) / (Math.PI * 2), facing };
+    if (p.staminaF() < 0.2 && m.phase !== 'rally') return { name: 'slump', kind: 'clock', t: this.time };
+    return { name: 'ready', kind: 'clock', t: this.time + p.idx * 0.37 };
+  }
+
   drawPlayer(ctx: CanvasRenderingContext2D, p: Player): void {
     const pr = this.cam.project(p.x, p.y, 0);
+    if (settings.playerArt === 'sprites') {
+      playerSprites.load();
+      // the jump gesture and the split step still lift the sprite off the ground
+      let lift = 0;
+      if (p.splitStep > 0) lift = Math.sin((p.splitStep / 12) * Math.PI) * 0.1;
+      if (p.gesture?.kind === 'jump' && p.gesture.t < 160) lift = Math.abs(Math.sin(p.gesture.t * 0.16)) * 0.35;
+      const s = pr.s * FIGURE_SCALE;
+      const view = p.side === 1 ? 'front' : 'back';
+      // the strips are right-handed: left-handers are mirrored
+      if (playerSprites.draw(ctx, view, this.spriteAnimFor(p), pr.x, pr.y - lift * s, s, p.setup.hand === 'L')) return;
+      // still loading or no art: fall through to the drawn figure
+    }
     const pose = this.poseFor(p);
     const mirror = (p.side === 1) !== (p.setup.hand === 'L');
     let bob = 0;
@@ -821,51 +882,4 @@ export class MatchView {
       ctx.restore();
     }
   }
-}
-
-/** Ground-stroke key poses: forehand vs (two- or one-handed) backhand, plus slice, drop and lob variants. */
-export function strokePoses(fh: boolean, type: ShotType, twoHanded: boolean): { back: Pose; con: Pose; fol: Pose } {
-  if (type === 'slice' || type === 'drop') {
-    const back = fh ? POSES.fhSliceBack : POSES.bhSliceBack;
-    const con = fh ? POSES.fhSliceContact : POSES.bhSliceContact;
-    const fol = fh ? POSES.fhSliceFollow : POSES.bhSliceFollow;
-    // the drop shot is a short, soft version of the slice
-    if (type === 'drop') return { back: lerpPose(POSES.ready, back, 0.65), con, fol: lerpPose(con, fol, 0.45) };
-    return { back, con, fol };
-  }
-  if (fh) return { back: POSES.fhBack, con: POSES.fhContact, fol: type === 'lob' ? POSES.lobFollow : POSES.fhFollow };
-  if (twoHanded) return { back: POSES.bhBack, con: POSES.bhContact, fol: type === 'lob' ? lerpPose(POSES.bhFollow, POSES.lobFollow, 0.5) : POSES.bhFollow };
-  return { back: POSES.bh1Back, con: POSES.bh1Contact, fol: type === 'lob' ? lerpPose(POSES.bh1Follow, POSES.lobFollow, 0.5) : POSES.bh1Follow };
-}
-
-/**
- * Slide stroke (M20): keep the arms and racket of the stroke pose, drop the body and split the legs.
- * `d` is the slide direction in body space (+1 = the figure's +x), `k` 0..1 how deep the slide is.
- */
-export function slidePose(p: Pose, d: number, k: number): Pose {
-  const drop = 0.17 * k;
-  const o: Pose = { ...p };
-  for (const j of ['head', 'neck', 'sL', 'sR', 'eL', 'eR', 'hL', 'hR'] as const) o[j] = [p[j][0] + d * 0.06 * k, p[j][1] - drop];
-  const lerp = (a: [number, number], b: [number, number]): [number, number] => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
-  // lead leg (slide side) bent and sliding; trail leg stretched out behind
-  const lead = d > 0 ? 'R' : 'L';
-  const trail = d > 0 ? 'L' : 'R';
-  o.hip = lerp(p.hip, [p.hip[0] + d * 0.08, p.hip[1] - drop]);
-  o[`k${lead}`] = lerp(p[`k${lead}`], [d * 0.36, 0.4]);
-  o[`f${lead}`] = lerp(p[`f${lead}`], [d * 0.58, 0.03]);
-  o[`k${trail}`] = lerp(p[`k${trail}`], [-d * 0.3, 0.28]);
-  o[`f${trail}`] = lerp(p[`f${trail}`], [-d * 0.66, 0.03]);
-  o.lean = p.lean + d * 0.05 * k;
-  return o;
-}
-
-function mirrorPose(p: Pose): Pose {
-  const o = {} as Pose;
-  for (const k of Object.keys(p) as (keyof Pose)[]) {
-    const v = p[k];
-    if (typeof v === 'number') (o as any)[k] = k === 'racket' || k === 'lean' ? -v : v;
-    else (o as any)[k] = [-v[0], v[1]];
-  }
-  // swap left/right limbs so the racket hand stays the racket hand
-  return o;
 }
