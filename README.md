@@ -21,6 +21,8 @@ The controls work like Tennis Elbow 4's **Arcade** mode: you hold a strike butto
 | Pause | Esc / P | Start |
 | Mute | M | |
 
+**Phones and tablets:** an on-screen controller appears automatically on touch screens. It has a joystick on the left, buttons **1**, **2**, **ACC** and **✋** (gesture) on the right, and pause and fullscreen buttons. In menus the stick moves the cursor, **1** confirms and **ACC** goes back. Portrait puts the court at the top with the controls below it, and landscape puts the controls on either side. You can force the controller on or off in **Options → Touch controls**, or add `?touch` to the URL to show it on a desktop. The game can be added to the home screen and then opens fullscreen.
+
 **How to hit:** press and hold a strike button *before* the ball reaches you, and keep holding: you hit it automatically when it arrives. While you hold, your player walks to the ball on their own (to the green spot), ←/→ sweeps your aim (the longer you push, the further it goes), and ↑/↓ (toward / away from the net) picks the strike. The earlier you press, the more accurate and deeper the shot: the ring at your feet fills up and the aiming zone on the other side shrinks. Don't hit the ball while it is still rising in the red/orange danger zone, and keep it beside your body, not into it. You only get a few good accelerations per point (the ACC pips). With no button held you play a weak safe shot.
 
 **Versus (one keyboard):** P1 uses WASD to move, with F / G / R / T for strike 1 / strike 2 / acceleration / gesture. P2 uses the arrows, with Numpad 1-4 (or 1-4 on the number row). Two gamepads also work. All keys can be rebound in **Options**, which also has Arcade/Simulation controls, auto-positioning speed and the court preview.

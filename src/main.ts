@@ -4,6 +4,7 @@ import { installHooks } from './testing/hooks';
 import { audio } from './core/audio';
 import { TitleScene } from './scenes/title';
 import { registerScenes } from './scenes/registry';
+import { installTouch } from './core/touch';
 
 const canvas = document.getElementById('screen') as HTMLCanvasElement;
 const g = new Game(canvas);
@@ -13,9 +14,11 @@ input.attach(window);
 const unlock = () => audio.unlock();
 window.addEventListener('keydown', unlock);
 window.addEventListener('pointerdown', unlock);
+window.addEventListener('touchend', unlock); // iOS only resumes audio from a touchend/click
 canvas.addEventListener('pointerdown', () => canvas.focus());
 canvas.focus();
 
+installTouch(g);
 installHooks(g);
 registerScenes();
 g.goto(new TitleScene(), 0);

@@ -6,6 +6,7 @@ import { text } from '../gfx/text';
 import { audio } from '../core/audio';
 import { input } from '../core/input';
 import { settings } from '../core/settings';
+import { touch } from '../core/touch';
 import { goExhibition, goTournament, goCareer, goVersus, goPractice, goOptions } from './nav';
 
 export class TitleScene extends MenuScene {
@@ -48,12 +49,18 @@ export class TitleScene extends MenuScene {
     roundRect(ctx, 34, 388, W - 68, 76, 12);
     ctx.fill();
     text(ctx, 'HOW TO PLAY', 50, 404, { size: 12, color: '#ffc04a' });
-    text(ctx, 'HOLD X (or Space) before the ball comes and keep holding: you hit it by yourself. Press early = accurate.', 50, 424, { size: 10, weight: 700 });
-    text(ctx, 'While holding: ←/→ sweeps the aim, ↑ short / ↓ topspin  •  Z slice (↑ drop, ↓ lob)  •  X+Z or C acceleration', 50, 442, { size: 10, weight: 700 });
-    text(ctx, `M mute ${settings.muted ? '(muted)' : ''}  •  Esc pause`, 50, 458, { size: 9, weight: 700, color: '#bcd0ee' });
+    if (touch?.active) {
+      text(ctx, 'HOLD 1 before the ball comes and keep holding: you hit it by yourself. Press early = accurate.', 50, 424, { size: 10, weight: 700 });
+      text(ctx, 'While holding: stick ←/→ sweeps the aim, ↑ short / ↓ topspin  •  2 slice (↑ drop, ↓ lob)  •  ACC acceleration', 50, 442, { size: 10, weight: 700 });
+      text(ctx, 'Stick moves the menu cursor  •  1 = OK, ACC = back  •  ❚❚ pause', 50, 458, { size: 9, weight: 700, color: '#bcd0ee' });
+    } else {
+      text(ctx, 'HOLD X (or Space) before the ball comes and keep holding: you hit it by yourself. Press early = accurate.', 50, 424, { size: 10, weight: 700 });
+      text(ctx, 'While holding: ←/→ sweeps the aim, ↑ short / ↓ topspin  •  Z slice (↑ drop, ↓ lob)  •  X+Z or C acceleration', 50, 442, { size: 10, weight: 700 });
+      text(ctx, `M mute ${settings.muted ? '(muted)' : ''}  •  Esc pause`, 50, 458, { size: 9, weight: 700, color: '#bcd0ee' });
+    }
     if (audio.state === 'locked') {
       const a = 0.6 + Math.sin(t * 4) * 0.4;
-      text(ctx, '♪ press any key for sound', W - 44, 404, { size: 10, align: 'right', alpha: a, color: '#d8f0ff' });
+      text(ctx, touch?.active ? '♪ tap for sound' : '♪ press any key for sound', W - 44, 404, { size: 10, align: 'right', alpha: a, color: '#d8f0ff' });
     }
   }
 }
