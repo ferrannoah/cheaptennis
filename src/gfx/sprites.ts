@@ -20,7 +20,7 @@ export type SpriteView = 'front' | 'back';
 export const ANIM_NAMES = [
   'ready', 'run', 'forehand', 'backhand', 'backhand1h', 'fhSlice', 'bhSlice', 'fhLob', 'bhLob',
   'volleyFh', 'volleyBh', 'overhead', 'serve', 'dive', 'celebrate', 'slump',
-  'gFist', 'gRage', 'gSorry', 'gApplaud', 'gFacepalm', 'gCrazy', 'gThrow',
+  'gFist', 'gRage', 'gSorry', 'gApplaud', 'gFacepalm', 'gCrazy', 'gThrow', 'idleSpin',
 ] as const;
 export type AnimName = (typeof ANIM_NAMES)[number];
 
@@ -49,6 +49,7 @@ export const FALLBACKS: Record<AnimName, AnimName[]> = {
   gFacepalm: ['slump'],
   gCrazy: ['celebrate'],
   gThrow: ['gRage', 'slump'],
+  idleSpin: ['ready'],
 };
 
 export interface AnimMeta {
@@ -69,6 +70,10 @@ export interface SpriteManifest {
   /** standing character height in px, soles to top of head: sets the in-game scale */
   figureHeight: number;
   animations: Partial<Record<AnimName, AnimMeta>>;
+  /** strips ("view/anim") holding real art from npm run sprites:import; the placeholder baker leaves them alone */
+  custom?: string[];
+  /** animations with no art on purpose: they play a related strip through FALLBACKS */
+  noPlaceholder?: AnimName[];
 }
 
 /** How the game wants an animation played this frame. */

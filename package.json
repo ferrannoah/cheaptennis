@@ -10,7 +10,8 @@
     "test": "vitest run",
     "play": "playwright test --reporter=line",
     "sim:career": "vitest run tests/career-sim.test.ts",
-    "sprites:placeholder": "node scripts/bake-placeholder-sprites.mjs"
+    "sprites:placeholder": "node scripts/bake-placeholder-sprites.mjs",
+    "sprites:import": "node scripts/import-sprite-sheet.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.48.2",

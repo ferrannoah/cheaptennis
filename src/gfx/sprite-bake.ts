@@ -40,7 +40,8 @@ function loopOf(g: Pose, fps: number, ks = [0.75, 0.9, 1, 0.9], bobs = [0, 0, 0,
   return { meta: { fps, loop: true }, frames: ks.map((k, i) => ({ pose: mid(R, g, k), bob: bobs[i] })) };
 }
 
-export function placeholderAnims(): Record<AnimName, PlaceholderAnim> {
+/** placeholder art for every animation except the idle racket spin (no drawn pose for it) */
+export function placeholderAnims(): Partial<Record<AnimName, PlaceholderAnim>> {
   const fh = strokePoses(true, 'topspin', true);
   const bh2 = strokePoses(false, 'topspin', true);
   const bh1 = strokePoses(false, 'topspin', false);
@@ -154,8 +155,9 @@ export function bakeAll(): { manifest: SpriteManifest; strips: Record<string, st
   const manifest: SpriteManifest = { cell: [CELL, CELL], anchor: ANCHOR, figureHeight: FIGURE_PX, animations: {} };
   const strips: Record<string, string> = {};
   for (const name of Object.keys(anims) as AnimName[]) {
-    manifest.animations[name] = anims[name].meta;
-    for (const view of ['front', 'back'] as SpriteView[]) strips[`${view}/${name}`] = bakeStrip(view, anims[name]).toDataURL('image/png');
+    const a = anims[name]!;
+    manifest.animations[name] = a.meta;
+    for (const view of ['front', 'back'] as SpriteView[]) strips[`${view}/${name}`] = bakeStrip(view, a).toDataURL('image/png');
   }
   return { manifest, strips };
 }

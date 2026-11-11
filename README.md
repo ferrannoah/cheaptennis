@@ -76,9 +76,42 @@ This runs the browser playtests (they use the installed Microsoft Edge; set `PW_
 
 ## Player sprites
 
-**Options → Player graphics** switches between **DRAWN** (the built-in figure in each player's kit colours) and **SPRITES** (sprite-sheet art from `public/sprites/player/`). The sprites shipped now are placeholders baked from the drawn figure's poses (`npm run sprites:placeholder` regenerates them).
+**Options → Player graphics** switches between **DRAWN** (the built-in figure in each player's kit colours) and **SPRITES** (sprite-sheet art from `public/sprites/player/`). All animations use real art, imported from the sheets in `art/player/`, apart from three:
+- the **serve** plays the overhead;
+- the **two-handed backhand** plays the one-handed backhand;
+- the **racket throw** plays the rage gesture.
 
-To use real art, replace the PNGs, keeping the same format:
+Those three are listed under `noPlaceholder` in `manifest.json` and borrow through the game's fallbacks. When a player stands still between points, the idle racket spin (`idleSpin`) plays every few seconds. `npm run sprites:placeholder` rebuilds placeholder art for any animation without art and never overwrites imported art.
+
+To import a generated sheet (one animation per row, frames left to right, with space between them):
+
+```bash
+npm run sprites:import -- art/player/backhand.png --rows front/backhand,back/backhand
+```
+
+The importer:
+- removes the background, white or a painted checkerboard, outside the character's dark outline;
+- finds the rows and frames;
+- scales each row so its first frame (a standing pose) is the right height;
+- puts the feet on the anchor point and writes the strips;
+- marks the strips as real art in `manifest.json` and keeps a copy of the sheet in `art/player/`.
+
+Check that the `contact` frame number in `manifest.json` matches the art.
+
+Extra options for awkward sheets:
+- **Mirror a row:** end a strip name with `~` (for a swing drawn on the wrong side).
+- **Send a row to several strips:** separate the names with `|`.
+- **Keep only some frames:** add `@0.6`.
+- **Skip a row:** use `-`.
+- **Fix the size:** `--stand 0.85` when the first frame is crouched, `--stand 1.3` when it holds the racket above the head.
+
+Every import used for the current art is listed in `art/player/IMPORTS.sh`. For example, the volley sheet has a backhand volley on top and a forehand volley below:
+
+```bash
+npm run sprites:import -- art/player/volley.png --rows "front/volleyBh|front/volleyFh~,back/volleyFh|back/volleyBh~"
+```
+
+Strip format (the importer produces this, or replace the PNGs by hand):
 
 - `front/<anim>.png` is the far player, facing the camera. `back/<anim>.png` is the near player, seen from behind. Draw right-handers only: left-handers are mirrored.
 - Each PNG is one horizontal strip of 256×256 cells on a transparent background. The number of frames is the strip width divided by 256, so any count works.
@@ -106,5 +139,5 @@ src/career    rankings, entry rules, weekly field simulation, progression, save
 src/data      tour.ts (all tiers, points, cutoffs, calendar), surfaces, archetypes, tuning, music
 src/scenes    every screen
 tests/        Vitest unit tests     e2e/   Playwright playtests     docs/   GDD + PLAN
-public/sprites/player   player sprite strips + manifest.json     scripts/   placeholder sprite baker
+public/sprites/player   player sprite strips + manifest.json     scripts/   sprite importer + placeholder baker     art/   source sprite sheets
 ```

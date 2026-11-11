@@ -10,16 +10,14 @@
   "figureHeight": 100,
   "animations": {
     "ready": {
-      "fps": 6,
+      "fps": 2,
       "loop": true
     },
     "run": {
-      "loop": true
+      "loop": true,
+      "faces": "right"
     },
     "forehand": {
-      "contact": 3
-    },
-    "backhand": {
       "contact": 3
     },
     "backhand1h": {
@@ -46,14 +44,11 @@
     "overhead": {
       "contact": 3
     },
-    "serve": {
-      "contact": 6
-    },
     "dive": {
       "contact": 3
     },
     "celebrate": {
-      "fps": 8,
+      "fps": 6,
       "loop": true
     },
     "slump": {
@@ -61,32 +56,81 @@
       "loop": true
     },
     "gFist": {
-      "fps": 8,
+      "fps": 6,
       "loop": true
     },
     "gRage": {
-      "fps": 8,
+      "fps": 6,
       "loop": true
     },
     "gSorry": {
-      "fps": 4,
+      "fps": 3,
       "loop": true
     },
     "gApplaud": {
-      "fps": 8,
+      "fps": 6,
       "loop": true
     },
     "gFacepalm": {
-      "fps": 4,
+      "fps": 3,
       "loop": true
     },
     "gCrazy": {
-      "fps": 10,
-      "loop": true
-    },
-    "gThrow": {
       "fps": 6,
       "loop": true
+    },
+    "idleSpin": {
+      "fps": 10,
+      "loop": false
     }
-  }
+  },
+  "noPlaceholder": [
+    "serve",
+    "backhand",
+    "gThrow"
+  ],
+  "custom": [
+    "back/backhand1h",
+    "back/bhLob",
+    "back/bhSlice",
+    "back/celebrate",
+    "back/dive",
+    "back/fhLob",
+    "back/fhSlice",
+    "back/forehand",
+    "back/gApplaud",
+    "back/gCrazy",
+    "back/gFacepalm",
+    "back/gFist",
+    "back/gRage",
+    "back/gSorry",
+    "back/idleSpin",
+    "back/overhead",
+    "back/ready",
+    "back/run",
+    "back/slump",
+    "back/volleyBh",
+    "back/volleyFh",
+    "front/backhand1h",
+    "front/bhLob",
+    "front/bhSlice",
+    "front/celebrate",
+    "front/dive",
+    "front/fhLob",
+    "front/fhSlice",
+    "front/forehand",
+    "front/gApplaud",
+    "front/gCrazy",
+    "front/gFacepalm",
+    "front/gFist",
+    "front/gRage",
+    "front/gSorry",
+    "front/idleSpin",
+    "front/overhead",
+    "front/ready",
+    "front/run",
+    "front/slump",
+    "front/volleyBh",
+    "front/volleyFh"
+  ]
 }

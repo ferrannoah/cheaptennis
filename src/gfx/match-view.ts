@@ -31,6 +31,9 @@ const ZONE_COLOR: Record<Zone, string> = { green: '#5fe07a', orange: '#ff9a2e', 
 const GESTURE_POSE: Record<GestureKind, keyof typeof POSES> = {
   jump: 'celebrate', fist: 'gFist', rage: 'gRage', sorry: 'gSorry', applaud: 'gApplaud', facepalm: 'gFacepalm', crazy: 'gCrazy', throw: 'gThrow',
 };
+/** idle racket spin between points (sprite mode): how often, and how long one spin plays */
+const IDLE_EVERY = 4.5;
+const IDLE_SPIN_S = 0.8;
 /** sprite animation per gesture (same names as the poses) */
 const GESTURE_ANIM: Record<GestureKind, AnimName> = {
   jump: 'celebrate', fist: 'gFist', rage: 'gRage', sorry: 'gSorry', applaud: 'gApplaud', facepalm: 'gFacepalm', crazy: 'gCrazy', throw: 'gThrow',
@@ -566,7 +569,13 @@ export class MatchView {
     if (p.celebrate > 0 && (m.phase === 'dead' || m.phase === 'over')) return { name: 'celebrate', kind: 'clock', t: this.time };
     if (Math.hypot(p.vx, p.vy) > 0.6) return { name: 'run', kind: 'cycle', phase: (p.runPhase * 2) / (Math.PI * 2), facing };
     if (p.staminaF() < 0.2 && m.phase !== 'rally') return { name: 'slump', kind: 'clock', t: this.time };
-    return { name: 'ready', kind: 'clock', t: this.time + p.idx * 0.37 };
+    const t = this.time + p.idx * 0.37;
+    // between points a player standing still spins the racket now and then (once every IDLE_EVERY s)
+    if (m.phase !== 'rally') {
+      const c = (t + p.idx * 2.3) % IDLE_EVERY;
+      if (c < IDLE_SPIN_S) return { name: 'idleSpin', kind: 'clock', t: c };
+    }
+    return { name: 'ready', kind: 'clock', t };
   }
 
   drawPlayer(ctx: CanvasRenderingContext2D, p: Player): void {
