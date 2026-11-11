@@ -20,6 +20,8 @@ class InputSystem {
   anyKeyThisFrame = false;
   lastDevice: 'kb' | 'pad' = 'kb';
   private repeat = new Map<string, number>();
+  /** on-screen touch controls: read once per frame and merged into gamepad slot 0 */
+  touchSource: (() => { buttons: boolean[]; axes: number[] } | null) | null = null;
 
   attach(target: Window): void {
     target.addEventListener('keydown', (e) => {
@@ -77,6 +79,18 @@ class InputSystem {
           axes: Array.from(g.axes),
         };
       } else this.pads[i] = { connected: false, buttons: [], axes: [] };
+    }
+    const t = this.touchSource?.();
+    if (t) {
+      const p = this.pads[0];
+      if (!p.connected) this.pads[0] = { connected: true, buttons: t.buttons.slice(), axes: t.axes.slice() };
+      else {
+        for (let b = 0; b < t.buttons.length; b++) p.buttons[b] = !!p.buttons[b] || t.buttons[b];
+        if (Math.hypot(t.axes[0], t.axes[1]) > Math.hypot(p.axes[0] ?? 0, p.axes[1] ?? 0)) {
+          p.axes[0] = t.axes[0];
+          p.axes[1] = t.axes[1];
+        }
+      }
     }
     for (let i = 0; i < 4; i++) {
       const p = this.pads[i];

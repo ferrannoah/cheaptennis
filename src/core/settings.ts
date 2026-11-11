@@ -46,6 +46,8 @@ export type AutoPos = 'slow' | 'average' | 'fast';
 export type Preview = 'off' | 'impact' | 'danger' | 'all';
 /** how players are drawn: the procedural figure, or sprite sheets from public/sprites/player */
 export type PlayerArt = 'drawn' | 'sprites';
+/** on-screen controller overlay: auto = shown on touch screens */
+export type TouchControls = 'auto' | 'on' | 'off';
 
 export interface Settings {
   version: 1;
@@ -67,6 +69,7 @@ export interface Settings {
   autoPos: AutoPos;
   preview: Preview;
   playerArt: PlayerArt;
+  touchControls: TouchControls;
 }
 
 function defaults(): Settings {
@@ -89,6 +92,7 @@ function defaults(): Settings {
     autoPos: 'fast',
     preview: 'all',
     playerArt: 'drawn',
+    touchControls: 'auto',
   };
 }
 

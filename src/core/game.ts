@@ -42,6 +42,8 @@ export class Game {
   shake = 0;
   shakeX = 0;
   shakeY = 0;
+  /** pin the picture to the top of the window (portrait phones: touch controls go underneath) */
+  alignTop = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -68,7 +70,7 @@ export class Game {
     this.scale = Math.min(ww / W, wh / H);
     const newRes = Math.min(3, Math.max(1, Math.ceil(this.scale * dpr * 2) / 2));
     this.offX = Math.round((this.canvas.width - W * this.scale * dpr) / 2);
-    this.offY = Math.round((this.canvas.height - H * this.scale * dpr) / 2);
+    this.offY = this.alignTop ? 0 : Math.round((this.canvas.height - H * this.scale * dpr) / 2);
     const changed = newRes !== this.res;
     this.res = newRes;
     if (changed) for (const f of this.onResize) f();

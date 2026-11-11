@@ -4,6 +4,7 @@ import { drawSetupScreen } from './setup-common';
 import { settings, saveSettings, resetBindings, Difficulty, Profile, ACTIONS, ACTION_LABEL, keyLabel, PAD_LABEL, Action, STRIKE_ACTIONS } from '../core/settings';
 import { audio } from '../core/audio';
 import { input } from '../core/input';
+import { touch } from '../core/touch';
 import { TitleScene } from './title';
 import { drawBackdrop } from '../gfx/backdrop';
 import { panel, menuList } from '../gfx/ui';
@@ -52,6 +53,14 @@ export class OptionsScene extends MenuScene {
         id: 'playerart', label: 'Player graphics', value: settings.playerArt === 'sprites' ? 'SPRITES' : 'DRAWN',
         change: set(() => (settings.playerArt = settings.playerArt === 'sprites' ? 'drawn' : 'sprites')),
         hint: 'Drawn: the built-in figure in your kit colours. Sprites: the sprite-sheet art (placeholder for now)',
+      },
+      {
+        id: 'touch', label: 'Touch controls', value: settings.touchControls.toUpperCase(),
+        change: (d) => set(() => {
+          settings.touchControls = cycle(['auto', 'on', 'off'] as const, settings.touchControls, d);
+          touch?.refresh();
+        })(),
+        hint: 'On-screen joystick and buttons. Auto: shown on phones and tablets',
       },
       { id: 'difficulty', label: 'COM difficulty', value: settings.difficulty.toUpperCase(), change: (d) => set(() => (settings.difficulty = cycle(DIFFS, settings.difficulty, d)))() },
       { id: 'clen', label: 'Career match length', value: { short: 'First to 3 games', set: '6-game set', full: 'Best of 3 sets' }[settings.careerLength], change: (d) => set(() => (settings.careerLength = cycle(['short', 'set', 'full'] as const, settings.careerLength, d)))() },
