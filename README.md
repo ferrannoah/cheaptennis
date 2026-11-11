@@ -76,7 +76,12 @@ This runs the browser playtests (they use the installed Microsoft Edge; set `PW_
 
 ## Player sprites
 
-**Options → Player graphics** switches between **DRAWN** (the built-in figure in each player's kit colours) and **SPRITES** (sprite-sheet art from `public/sprites/player/`). The forehand uses real art (`art/player/forehand.png`). The other animations are placeholders baked from the drawn figure's poses. `npm run sprites:placeholder` regenerates the placeholders and never overwrites imported art.
+**Options → Player graphics** switches between **DRAWN** (the built-in figure in each player's kit colours) and **SPRITES** (sprite-sheet art from `public/sprites/player/`). All animations use real art, imported from the sheets in `art/player/`, apart from three:
+- the **serve** plays the overhead;
+- the **two-handed backhand** plays the one-handed backhand;
+- the **racket throw** plays the rage gesture.
+
+Those three are listed under `noPlaceholder` in `manifest.json` and borrow through the game's fallbacks. When a player stands still between points, the idle racket spin (`idleSpin`) plays every few seconds. `npm run sprites:placeholder` rebuilds placeholder art for any animation without art and never overwrites imported art.
 
 To import a generated sheet (one animation per row, frames left to right, with space between them):
 
@@ -92,6 +97,19 @@ The importer:
 - marks the strips as real art in `manifest.json` and keeps a copy of the sheet in `art/player/`.
 
 Check that the `contact` frame number in `manifest.json` matches the art.
+
+Extra options for awkward sheets:
+- **Mirror a row:** end a strip name with `~` (for a swing drawn on the wrong side).
+- **Send a row to several strips:** separate the names with `|`.
+- **Keep only some frames:** add `@0.6`.
+- **Skip a row:** use `-`.
+- **Fix the size:** `--stand 0.85` when the first frame is crouched, `--stand 1.3` when it holds the racket above the head.
+
+Every import used for the current art is listed in `art/player/IMPORTS.sh`. For example, the volley sheet has a backhand volley on top and a forehand volley below:
+
+```bash
+npm run sprites:import -- art/player/volley.png --rows "front/volleyBh|front/volleyFh~,back/volleyFh|back/volleyBh~"
+```
 
 Strip format (the importer produces this, or replace the PNGs by hand):
 

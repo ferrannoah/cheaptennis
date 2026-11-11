@@ -38,6 +38,12 @@ try {
   const manPath = join(outDir, 'manifest.json');
   const old = existsSync(manPath) ? JSON.parse(readFileSync(manPath, 'utf8')) : {};
   const custom = old.custom ?? [];
+  // animations listed under "noPlaceholder" borrow real art through the game's fallbacks instead
+  for (const anim of old.noPlaceholder ?? []) {
+    delete manifest.animations[anim];
+    for (const v of ['front', 'back']) delete strips[`${v}/${anim}`];
+  }
+  if (old.noPlaceholder) manifest.noPlaceholder = old.noPlaceholder;
   if (custom.length) {
     manifest.custom = custom;
     for (const key of custom) {
